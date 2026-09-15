@@ -1,0 +1,67 @@
+package com.nexora.sport.model;
+
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
+
+@Entity
+@Table(name = "alumnos")
+@Getter
+@Setter
+public class Alumno {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "centro_id", nullable = false)
+    private Centro centro;
+
+    @Column(nullable = false, length = 150)
+    private String nombre;
+
+    @Column(name = "fecha_nacimiento")
+    private LocalDate fechaNacimiento;
+
+    @Column(length = 30)
+    private String telefono;
+
+    @Column(length = 150)
+    private String email;
+
+    @Column(name = "contacto_emergencia_nombre", length = 150)
+    private String contactoEmergenciaNombre;
+
+    @Column(name = "contacto_emergencia_telefono", length = 30)
+    private String contactoEmergenciaTelefono;
+
+    @Column(name = "foto_url", length = 300)
+    private String fotoUrl;
+
+    @Column(length = 1000)
+    private String observaciones;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private EstadoAlumno estado = EstadoAlumno.ACTIVO;
+
+    @Column(name = "fecha_ingreso", nullable = false)
+    private LocalDate fechaIngreso = LocalDate.now();
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "alumno_disciplinas",
+            joinColumns = @JoinColumn(name = "alumno_id"),
+            inverseJoinColumns = @JoinColumn(name = "disciplina_id")
+    )
+    private Set<Disciplina> disciplinas = new HashSet<>();
+}

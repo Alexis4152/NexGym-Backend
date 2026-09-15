@@ -1,0 +1,146 @@
+package com.nexora.sport.service;
+
+import com.nexora.sport.dto.*;
+import com.nexora.sport.exception.FieldConflictException;
+import com.nexora.sport.exception.ResourceNotFoundException;
+import com.nexora.sport.model.*;
+import com.nexora.sport.repository.*;
+import com.nexora.sport.security.TenantScope;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+@Service
+public class InventarioService {
+
+    private final ArticuloInventarioRepository articuloRepository;
+    private final CategoriaInventarioRepository categoriaRepository;
+    private final MovimientoInventarioRepository movimientoRepository;
+    private final DisciplinaRepository disciplinaRepository;
+    private final CentroRepository centroRepository;
+    private final TenantScope tenantScope;
+
+    public InventarioService(ArticuloInventarioRepository articuloRepository, CategoriaInventarioRepository categoriaRepository,
+                              MovimientoInventarioRepository movimientoRepository, DisciplinaRepository disciplinaRepository,
+                              CentroRepository centroRepository, TenantScope tenantScope) {
+        this.articuloRepository = articuloRepository;
+        this.categoriaRepository = categoriaRepository;
+        this.movimientoRepository = movimientoRepository;
+        this.disciplinaRepository = disciplinaRepository;
+        this.centroRepository = centroRepository;
+        this.tenantScope = tenantScope;
+    }
+
+    // ---- Categorias ----
+    public List<CategoriaInventarioDto> listarCategorias(Usuario actor) {
+        return categoriaRepository.findByCentroIdAndActivoTrue(tenantScope.scopeId(actor)).stream()
+                .map(c -> new CategoriaInventarioDto(c.getId(), c.getNombre(), c.isActivo())).toList();
+    }
+
+    @Transactional
+    public CategoriaInventarioDto crearCategoria(Usuario actor, CategoriaInventarioRequest request) {
+        CategoriaInventario c = new CategoriaInventario();
+        c.setCentro(centroRepository.getReferenceById(tenantScope.scopeId(actor)));
+        c.setNombre(request.nombre());
+        c = categoriaRepository.save(c);
+        return new CategoriaInventarioDto(c.getId(), c.getNombre(), c.isActivo());
+    }
+
+    // ---- Articulos ----
+    public PageResponse<ArticuloInventarioDto> listar(Usuario actor, String q, Pageable pageable) {
+        Long centroId = tenantScope.scopeId(actor);
+        var page = (q == null || q.isBlank())
+                ? articuloRepository.findByCentroIdAndDeletedAtIsNull(centroId, pageable)
+                : articuloRepository.findByCentroIdAndDeletedAtIsNullAndNombreContainingIgnoreCase(centroId, q, pageable);
+        return PageResponse.of(page, this::toDto);
+    }
+
+    public List<ArticuloInventarioDto> stockBajo(Usuario actor) {
+        return articuloRepository.findConStockBajo(tenantScope.scopeId(actor)).stream().map(this::toDto).toList();
+    }
+
+    public ArticuloInventario buscar(Long id) {
+        return articuloRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Articulo no encontrado"));
+    }
+
+    @Transactional
+    public ArticuloInventarioDto crear(Usuario actor, ArticuloInventarioRequest request) {
+        Long centroId = tenantScope.scopeId(actor);
+        if (request.codigoBarras() != null && !request.codigoBarras().isBlank()
+                && articuloRepository.findByCentroIdAndCodigoBarras(centroId, request.codigoBarras()).isPresent()) {
+            throw new FieldConflictException("codigoBarras", "Ya existe un articulo con ese codigo de barras");
+        }
+        ArticuloInventario a = new ArticuloInventario();
+        a.setCentro(centroRepository.getReferenceById(centroId));
+        aplicar(a, request);
+        return toDto(articuloRepository.save(a));
+    }
+
+    @Transactional
+    public ArticuloInventarioDto actualizar(Long id, ArticuloInventarioRequest request) {
+        ArticuloInventario a = buscar(id);
+        aplicar(a, request);
+        return toDto(articuloRepository.save(a));
+    }
+
+    @Transactional
+    public void desactivar(Long id) {
+        ArticuloInventario a = buscar(id);
+        a.setActivo(false);
+        articuloRepository.save(a);
+    }
+
+    @Transactional
+    public ArticuloInventarioDto ajustarStock(Long id, Usuario actor, AjusteStockRequest request) {
+        ArticuloInventario a = buscar(id);
+        int anterior = a.getStock();
+        int nuevo = anterior + request.delta();
+        if (nuevo < 0) throw new IllegalArgumentException("El stock no puede quedar negativo");
+        a.setStock(nuevo);
+        articuloRepository.save(a);
+
+        MovimientoInventario mov = new MovimientoInventario();
+        mov.setArticulo(a);
+        mov.setTipo(request.delta() >= 0 ? TipoMovimientoInventario.ENTRADA : TipoMovimientoInventario.SALIDA);
+        mov.setStockAnterior(anterior);
+        mov.setStockNuevo(nuevo);
+        mov.setRazon(request.razon());
+        mov.setRegistradoPor(actor);
+        movimientoRepository.save(mov);
+
+        return toDto(a);
+    }
+
+    private void aplicar(ArticuloInventario a, ArticuloInventarioRequest request) {
+        a.setCategoria(request.categoriaId() != null ? categoriaRepository.getReferenceById(request.categoriaId()) : null);
+        a.setNombre(request.nombre());
+        a.setTipo(TipoArticulo.valueOf(request.tipo()));
+        a.setCodigoBarras(request.codigoBarras());
+        a.setStock(request.stock());
+        a.setStockMinimo(request.stockMinimo());
+        a.setCosto(request.costo());
+        a.setPrecioVenta(request.precioVenta());
+        a.setVendible(request.vendible());
+        Set<Disciplina> disciplinas = new HashSet<>();
+        if (request.disciplinaIds() != null) {
+            request.disciplinaIds().forEach(id -> disciplinas.add(disciplinaRepository.getReferenceById(id)));
+        }
+        a.setDisciplinas(disciplinas);
+    }
+
+    public ArticuloInventarioDto toDto(ArticuloInventario a) {
+        return new ArticuloInventarioDto(
+                a.getId(), a.getCategoria() != null ? a.getCategoria().getId() : null,
+                a.getCategoria() != null ? a.getCategoria().getNombre() : null,
+                a.getNombre(), a.getTipo().name(), a.getCodigoBarras(), a.getStock(), a.getStockMinimo(),
+                a.getCosto(), a.getPrecioVenta(), a.isVendible(), a.getImagenUrl(), a.isActivo(),
+                a.getDisciplinas().stream().map(Disciplina::getId).collect(Collectors.toSet()),
+                a.getDisciplinas().stream().map(Disciplina::getNombre).collect(Collectors.toSet())
+        );
+    }
+}

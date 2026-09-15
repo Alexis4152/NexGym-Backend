@@ -1,0 +1,15 @@
+package com.nexora.sport.dto;
+
+import java.util.Set;
+
+public record InstructorDto(
+        Long id,
+        String nombre,
+        String telefono,
+        String email,
+        String especialidad,
+        String fotoUrl,
+        boolean activo,
+        Set<Long> disciplinaIds,
+        Set<String> disciplinaNombres
+) {}

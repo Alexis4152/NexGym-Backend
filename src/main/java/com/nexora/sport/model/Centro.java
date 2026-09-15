@@ -1,0 +1,49 @@
+package com.nexora.sport.model;
+
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.time.LocalDateTime;
+
+/** Un centro deportivo / gimnasio: la frontera de tenant de todo el sistema. */
+@Entity
+@Table(name = "centros")
+@Getter
+@Setter
+public class Centro {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false, length = 150)
+    private String nombre;
+
+    @Column(name = "slug_publico", unique = true, length = 80)
+    private String slugPublico;
+
+    @Column(name = "catalogo_publico_activo", nullable = false)
+    private boolean catalogoPublicoActivo = false;
+
+    @Column(name = "color_primario", length = 9)
+    private String colorPrimario = "#1c6690";
+
+    @Column(name = "logo_url", length = 300)
+    private String logoUrl;
+
+    @Column(length = 30)
+    private String telefono;
+
+    @Column(name = "email_contacto", length = 150)
+    private String emailContacto;
+
+    @Column(length = 250)
+    private String direccion;
+
+    @Column(nullable = false)
+    private boolean activo = true;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt = LocalDateTime.now();
+}
