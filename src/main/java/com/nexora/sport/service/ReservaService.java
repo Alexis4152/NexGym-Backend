@@ -33,10 +33,12 @@ public class ReservaService {
         this.tenantScope = tenantScope;
     }
 
+    @Transactional(readOnly = true)
     public PageResponse<ReservaDto> listar(Usuario actor, Pageable pageable) {
         return PageResponse.of(reservaRepository.findByCentroId(tenantScope.scopeId(actor), pageable), this::toDto);
     }
 
+    @Transactional(readOnly = true)
     public PageResponse<ReservaDto> listarPorAlumno(Long alumnoId, Pageable pageable) {
         return PageResponse.of(reservaRepository.findByAlumnoId(alumnoId, pageable), this::toDto);
     }

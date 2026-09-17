@@ -8,6 +8,7 @@ import com.nexora.sport.model.Centro;
 import com.nexora.sport.repository.ArticuloInventarioRepository;
 import com.nexora.sport.repository.CentroRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -23,12 +24,14 @@ public class PublicCatalogService {
         this.articuloRepository = articuloRepository;
     }
 
+    @Transactional(readOnly = true)
     public PublicCentroDto obtenerCentro(String slug) {
         Centro centro = resolverCentro(slug);
         return new PublicCentroDto(centro.getNombre(), centro.getLogoUrl(), centro.getColorPrimario(),
                 centro.getTelefono(), centro.getDireccion());
     }
 
+    @Transactional(readOnly = true)
     public List<PublicArticuloDto> listarProductos(String slug) {
         Centro centro = resolverCentro(slug);
         return articuloRepository.findByCentroIdAndVendibleTrueAndActivoTrueAndDeletedAtIsNull(centro.getId()).stream()

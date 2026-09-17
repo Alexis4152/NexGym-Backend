@@ -31,10 +31,12 @@ public class DisciplinaService {
         this.tenantScope = tenantScope;
     }
 
+    @Transactional(readOnly = true)
     public PageResponse<DisciplinaDto> listar(Usuario actor, Pageable pageable) {
         return PageResponse.of(disciplinaRepository.findByCentroId(tenantScope.scopeId(actor), pageable), this::toDto);
     }
 
+    @Transactional(readOnly = true)
     public List<DisciplinaDto> listarActivas(Usuario actor) {
         return disciplinaRepository.findByCentroIdAndActivoTrue(tenantScope.scopeId(actor)).stream()
                 .map(this::toDto).toList();
@@ -77,10 +79,11 @@ public class DisciplinaService {
         d.setColor(request.color());
         d.setModalidad(ModalidadDisciplina.valueOf(request.modalidad()));
         d.setLimiteAlumnos(request.limiteAlumnos());
+        d.setRequiereInstalacion(request.requiereInstalacion());
     }
 
     public DisciplinaDto toDto(Disciplina d) {
         return new DisciplinaDto(d.getId(), d.getNombre(), d.getDescripcion(), d.getIcono(), d.getColor(),
-                d.getModalidad().name(), d.getLimiteAlumnos(), d.isActivo());
+                d.getModalidad().name(), d.getLimiteAlumnos(), d.isRequiereInstalacion(), d.isActivo());
     }
 }

@@ -42,6 +42,7 @@ public class CompraService {
         this.tenantScope = tenantScope;
     }
 
+    @Transactional(readOnly = true)
     public PageResponse<CompraDto> listar(Usuario actor, Pageable pageable) {
         return PageResponse.of(compraRepository.findByCentroId(tenantScope.scopeId(actor), pageable), this::toDto);
     }

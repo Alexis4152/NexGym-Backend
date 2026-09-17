@@ -12,6 +12,8 @@ import com.nexora.sport.repository.RolRepository;
 import com.nexora.sport.repository.UsuarioRepository;
 import com.nexora.sport.security.TenantScope;
 import com.nexora.sport.util.PasswordGenerator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -22,6 +24,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class UsuarioService {
+
+    private static final Logger log = LoggerFactory.getLogger(UsuarioService.class);
 
     private final UsuarioRepository usuarioRepository;
     private final RolRepository rolRepository;
@@ -41,6 +45,7 @@ public class UsuarioService {
         this.tenantScope = tenantScope;
     }
 
+    @Transactional(readOnly = true)
     public PageResponse<UsuarioDto> listar(Usuario actor, Pageable pageable) {
         Long centroId = tenantScope.scopeId(actor);
         return PageResponse.of(usuarioRepository.findByCentroIdAndDeletedAtIsNull(centroId, pageable), this::toDto);
@@ -68,6 +73,9 @@ public class UsuarioService {
                 "Se creo una cuenta para ti.\n\nCorreo: " + usuario.getEmail() +
                         "\nContrasena temporal: " + tempPassword +
                         "\n\nDeberas cambiarla al iniciar sesion por primera vez.");
+        // Si no hay SMTP configurado el correo se descarta silenciosamente (MailService es
+        // "best effort"); dejamos la contrasena temporal en el log para no perderla en dev.
+        log.info("Usuario creado {} / rol {} — contrasena temporal: {}", usuario.getEmail(), rol.getNombre(), tempPassword);
         return toDto(usuario);
     }
 
@@ -91,6 +99,11 @@ public class UsuarioService {
 
     public Usuario buscar(Long id) {
         return usuarioRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+    }
+
+    @Transactional(readOnly = true)
+    public UsuarioDto obtenerPerfil(Long id) {
+        return toDto(buscar(id));
     }
 
     public UsuarioDto toDto(Usuario u) {

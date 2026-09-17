@@ -63,6 +63,7 @@ public class CajaService {
         categoriaRepository.save(c);
     }
 
+    @Transactional(readOnly = true)
     public List<CategoriaMovimientoDto> listarCategorias(Usuario actor, TipoMovimiento tipo) {
         Long centroId = tenantScope.scopeId(actor);
         var categorias = tipo != null
@@ -85,6 +86,7 @@ public class CajaService {
         return toDto(categoriaRepository.save(c));
     }
 
+    @Transactional(readOnly = true)
     public PageResponse<MovimientoFinancieroDto> listarMovimientos(Usuario actor, LocalDate desde, LocalDate hasta, Pageable pageable) {
         Long centroId = tenantScope.scopeId(actor);
         var page = (desde != null && hasta != null)

@@ -43,8 +43,9 @@ public class ClaseController {
     }
 
     @PutMapping("/{id}")
-    public ApiResponse<ClaseDto> actualizar(@PathVariable Long id, @Valid @RequestBody ClaseRequest request) {
-        return ApiResponse.ok("Clase actualizada", claseService.actualizar(id, request));
+    public ApiResponse<ClaseDto> actualizar(@AuthenticationPrincipal Usuario actor, @PathVariable Long id,
+                                             @Valid @RequestBody ClaseRequest request) {
+        return ApiResponse.ok("Clase actualizada", claseService.actualizar(actor, id, request));
     }
 
     @DeleteMapping("/{id}")

@@ -62,7 +62,10 @@ public class AuthController {
 
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UsuarioDto>> me(@AuthenticationPrincipal Usuario actor) {
-        return ResponseEntity.ok(ApiResponse.ok(usuarioService.toDto(actor)));
+        // No usar "actor" directamente: lo cargo el filtro JWT fuera de una transaccion,
+        // asi que su relacion "centro" (lazy) ya quedo con la sesion cerrada. Se recarga
+        // de forma administrada dentro de una transaccion para poder leerla.
+        return ResponseEntity.ok(ApiResponse.ok(usuarioService.obtenerPerfil(actor.getId())));
     }
 
     @PostMapping("/forgot-password")

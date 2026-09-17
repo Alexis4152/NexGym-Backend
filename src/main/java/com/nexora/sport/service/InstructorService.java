@@ -35,6 +35,7 @@ public class InstructorService {
         this.tenantScope = tenantScope;
     }
 
+    @Transactional(readOnly = true)
     public PageResponse<InstructorDto> listar(Usuario actor, String q, Pageable pageable) {
         Long centroId = tenantScope.scopeId(actor);
         var page = (q == null || q.isBlank())

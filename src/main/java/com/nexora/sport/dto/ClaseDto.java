@@ -4,6 +4,8 @@ import java.time.LocalTime;
 
 public record ClaseDto(
         Long id,
+        Long sucursalId,
+        String sucursalNombre,
         Long disciplinaId,
         String disciplinaNombre,
         Long instructorId,
@@ -11,7 +13,9 @@ public record ClaseDto(
         String diaSemana,
         LocalTime horaInicio,
         LocalTime horaFin,
-        String lugar,
+        Long lugarId,
+        String lugarNombre,
+        String lugarDireccion,
         int capacidadMaxima,
         boolean activo
 ) {}

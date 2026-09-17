@@ -22,6 +22,12 @@ public class TenantScope {
         return SUPER_ADMIN_ROLE.equalsIgnoreCase(actor.getRol().getNombre());
     }
 
+    /** Dueno, Administrador o SUPER_ADMIN: roles con autoridad para autorizar excepciones administrativas puntuales. */
+    public boolean isAdminOSuperior(Usuario actor) {
+        String rol = actor.getRol().getNombre();
+        return isSuperAdmin(actor) || "Dueno".equalsIgnoreCase(rol) || "Administrador".equalsIgnoreCase(rol);
+    }
+
     /** Centro sobre el que este actor puede leer/escribir en la peticion actual. */
     public Long scopeId(Usuario actor) {
         if (actor.getCentro() != null) {

@@ -36,6 +36,7 @@ public class AlumnoService {
         this.tenantScope = tenantScope;
     }
 
+    @Transactional(readOnly = true)
     public PageResponse<AlumnoDto> listar(Usuario actor, String q, Pageable pageable) {
         Long centroId = tenantScope.scopeId(actor);
         var page = (q == null || q.isBlank())
@@ -48,6 +49,7 @@ public class AlumnoService {
         return alumnoRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Alumno no encontrado"));
     }
 
+    @Transactional(readOnly = true)
     public AlumnoDto obtener(Long id) {
         return toDto(buscar(id));
     }

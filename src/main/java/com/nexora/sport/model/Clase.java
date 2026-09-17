@@ -22,6 +22,10 @@ public class Clase {
     private Centro centro;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sucursal_id", nullable = false)
+    private Sucursal sucursal;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "disciplina_id", nullable = false)
     private Disciplina disciplina;
 
@@ -39,8 +43,9 @@ public class Clase {
     @Column(name = "hora_fin", nullable = false)
     private LocalTime horaFin;
 
-    @Column(length = 100)
-    private String lugar;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "lugar_id")
+    private Lugar lugar;
 
     @Column(name = "capacidad_maxima", nullable = false)
     private Integer capacidadMaxima = 20;

@@ -37,10 +37,12 @@ public class MembresiaPlanService {
         this.tenantScope = tenantScope;
     }
 
+    @Transactional(readOnly = true)
     public PageResponse<MembresiaPlanDto> listar(Usuario actor, Pageable pageable) {
         return PageResponse.of(membresiaPlanRepository.findByCentroId(tenantScope.scopeId(actor), pageable), this::toDto);
     }
 
+    @Transactional(readOnly = true)
     public List<MembresiaPlanDto> listarActivos(Usuario actor) {
         return membresiaPlanRepository.findByCentroIdAndActivoTrue(tenantScope.scopeId(actor)).stream()
                 .map(this::toDto).toList();

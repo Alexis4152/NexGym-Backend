@@ -39,10 +39,12 @@ public class MembresiaService {
         this.tenantScope = tenantScope;
     }
 
+    @Transactional(readOnly = true)
     public PageResponse<MembresiaDto> listar(Usuario actor, Pageable pageable) {
         return PageResponse.of(membresiaRepository.findByCentroId(tenantScope.scopeId(actor), pageable), this::toDto);
     }
 
+    @Transactional(readOnly = true)
     public PageResponse<MembresiaDto> listarPorAlumno(Long alumnoId, Pageable pageable) {
         return PageResponse.of(membresiaRepository.findByAlumnoId(alumnoId, pageable), this::toDto);
     }
@@ -87,6 +89,7 @@ public class MembresiaService {
         return membresiaRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Membresia no encontrada"));
     }
 
+    @Transactional(readOnly = true)
     public List<MembresiaDto> proximasAVencer(Usuario actor, int diasHorizonte) {
         Long centroId = tenantScope.scopeId(actor);
         return membresiaRepository.findProximasAVencer(centroId, LocalDate.now(), LocalDate.now().plusDays(diasHorizonte))

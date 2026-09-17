@@ -41,6 +41,9 @@ public class Disciplina {
     @Column(name = "limite_alumnos")
     private Integer limiteAlumnos;
 
+    @Column(name = "requiere_instalacion", nullable = false)
+    private boolean requiereInstalacion = true;
+
     @Column(nullable = false)
     private boolean activo = true;
 }

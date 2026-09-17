@@ -18,17 +18,22 @@ public class CentroService {
     private final CentroRepository centroRepository;
     private final RolService rolService;
     private final CajaService cajaService;
+    private final SucursalService sucursalService;
 
-    public CentroService(CentroRepository centroRepository, RolService rolService, CajaService cajaService) {
+    public CentroService(CentroRepository centroRepository, RolService rolService, CajaService cajaService,
+                          SucursalService sucursalService) {
         this.centroRepository = centroRepository;
         this.rolService = rolService;
         this.cajaService = cajaService;
+        this.sucursalService = sucursalService;
     }
 
+    @Transactional(readOnly = true)
     public List<CentroDto> listar() {
         return centroRepository.findAll().stream().map(this::toDto).toList();
     }
 
+    @Transactional(readOnly = true)
     public CentroDto obtener(Long id) {
         return toDto(buscar(id));
     }
@@ -44,6 +49,7 @@ public class CentroService {
         centro = centroRepository.save(centro);
         rolService.seedRolesPorDefecto(centro);
         cajaService.seedCategoriasPorDefecto(centro);
+        sucursalService.seedSucursalPorDefecto(centro);
         return toDto(centro);
     }
 

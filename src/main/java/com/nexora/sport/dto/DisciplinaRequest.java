@@ -10,5 +10,6 @@ public record DisciplinaRequest(
         String icono,
         String color,
         @NotNull String modalidad,
-        Integer limiteAlumnos
+        Integer limiteAlumnos,
+        boolean requiereInstalacion
 ) {}

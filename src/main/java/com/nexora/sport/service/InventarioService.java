@@ -37,6 +37,7 @@ public class InventarioService {
     }
 
     // ---- Categorias ----
+    @Transactional(readOnly = true)
     public List<CategoriaInventarioDto> listarCategorias(Usuario actor) {
         return categoriaRepository.findByCentroIdAndActivoTrue(tenantScope.scopeId(actor)).stream()
                 .map(c -> new CategoriaInventarioDto(c.getId(), c.getNombre(), c.isActivo())).toList();
@@ -52,6 +53,7 @@ public class InventarioService {
     }
 
     // ---- Articulos ----
+    @Transactional(readOnly = true)
     public PageResponse<ArticuloInventarioDto> listar(Usuario actor, String q, Pageable pageable) {
         Long centroId = tenantScope.scopeId(actor);
         var page = (q == null || q.isBlank())
@@ -60,6 +62,7 @@ public class InventarioService {
         return PageResponse.of(page, this::toDto);
     }
 
+    @Transactional(readOnly = true)
     public List<ArticuloInventarioDto> stockBajo(Usuario actor) {
         return articuloRepository.findConStockBajo(tenantScope.scopeId(actor)).stream().map(this::toDto).toList();
     }

@@ -34,6 +34,7 @@ public class AsistenciaService {
         this.tenantScope = tenantScope;
     }
 
+    @Transactional(readOnly = true)
     public PageResponse<AsistenciaDto> listar(Usuario actor, Pageable pageable) {
         return PageResponse.of(asistenciaRepository.findByCentroId(tenantScope.scopeId(actor), pageable), this::toDto);
     }

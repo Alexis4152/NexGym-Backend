@@ -26,6 +26,7 @@ public class ProveedorService {
         this.tenantScope = tenantScope;
     }
 
+    @Transactional(readOnly = true)
     public PageResponse<ProveedorDto> listar(Usuario actor, Pageable pageable) {
         return PageResponse.of(proveedorRepository.findByCentroIdAndActivoTrue(tenantScope.scopeId(actor), pageable), this::toDto);
     }

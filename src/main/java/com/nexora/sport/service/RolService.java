@@ -25,6 +25,7 @@ public class RolService {
         this.rolRepository = rolRepository;
     }
 
+    @Transactional(readOnly = true)
     public List<RolDto> listar(Long centroId) {
         return rolRepository.findByCentroIdOrEsSistemaTrue(centroId).stream().map(this::toDto).toList();
     }

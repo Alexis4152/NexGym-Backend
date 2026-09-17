@@ -8,5 +8,6 @@ public record DisciplinaDto(
         String color,
         String modalidad,
         Integer limiteAlumnos,
+        boolean requiereInstalacion,
         boolean activo
 ) {}
