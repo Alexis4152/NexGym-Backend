@@ -16,6 +16,8 @@ public record ArticuloInventarioDto(
         BigDecimal precioVenta,
         boolean vendible,
         String imagenUrl,
+        boolean reservable,
+        BigDecimal descuentoApartadoPorcentaje,
         boolean activo,
         Set<Long> disciplinaIds,
         Set<String> disciplinaNombres

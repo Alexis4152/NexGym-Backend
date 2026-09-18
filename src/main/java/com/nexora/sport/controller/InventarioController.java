@@ -2,12 +2,14 @@ package com.nexora.sport.controller;
 
 import com.nexora.sport.dto.*;
 import com.nexora.sport.model.Usuario;
+import com.nexora.sport.service.ImagenArticuloService;
 import com.nexora.sport.service.InventarioService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -17,9 +19,11 @@ import java.util.List;
 public class InventarioController {
 
     private final InventarioService inventarioService;
+    private final ImagenArticuloService imagenArticuloService;
 
-    public InventarioController(InventarioService inventarioService) {
+    public InventarioController(InventarioService inventarioService, ImagenArticuloService imagenArticuloService) {
         this.inventarioService = inventarioService;
+        this.imagenArticuloService = imagenArticuloService;
     }
 
     @GetMapping("/categorias")
@@ -46,6 +50,12 @@ public class InventarioController {
         return ApiResponse.ok(inventarioService.stockBajo(actor));
     }
 
+    @GetMapping("/articulos/por-codigo/{codigoBarras}")
+    public ApiResponse<ArticuloInventarioDto> buscarPorCodigoBarras(@AuthenticationPrincipal Usuario actor,
+                                                                     @PathVariable String codigoBarras) {
+        return ApiResponse.ok(inventarioService.buscarPorCodigoBarras(actor, codigoBarras));
+    }
+
     @PostMapping("/articulos")
     public ApiResponse<ArticuloInventarioDto> crear(@AuthenticationPrincipal Usuario actor,
                                                       @Valid @RequestBody ArticuloInventarioRequest request) {
@@ -68,5 +78,27 @@ public class InventarioController {
     public ApiResponse<ArticuloInventarioDto> ajustarStock(@PathVariable Long id, @AuthenticationPrincipal Usuario actor,
                                                              @Valid @RequestBody AjusteStockRequest request) {
         return ApiResponse.ok("Stock actualizado", inventarioService.ajustarStock(id, actor, request));
+    }
+
+    @GetMapping("/articulos/{id}/imagenes")
+    public ApiResponse<List<ImagenArticuloDto>> listarImagenes(@PathVariable Long id) {
+        return ApiResponse.ok(imagenArticuloService.listar(id));
+    }
+
+    @PostMapping("/articulos/{id}/imagenes")
+    public ApiResponse<ImagenArticuloDto> subirImagen(@PathVariable Long id, @RequestParam("file") MultipartFile file) {
+        return ApiResponse.ok("Foto agregada", imagenArticuloService.subir(inventarioService.buscar(id), file));
+    }
+
+    @PutMapping("/articulos/{id}/imagenes/{imagenId}/principal")
+    public ApiResponse<Void> marcarPrincipal(@PathVariable Long id, @PathVariable Long imagenId) {
+        imagenArticuloService.marcarPrincipal(id, imagenId);
+        return ApiResponse.ok("Portada actualizada", null);
+    }
+
+    @DeleteMapping("/articulos/{id}/imagenes/{imagenId}")
+    public ApiResponse<Void> eliminarImagen(@PathVariable Long id, @PathVariable Long imagenId) {
+        imagenArticuloService.eliminar(id, imagenId);
+        return ApiResponse.ok("Foto eliminada", null);
     }
 }

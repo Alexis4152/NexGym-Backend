@@ -16,5 +16,7 @@ public record ArticuloInventarioRequest(
         BigDecimal costo,
         BigDecimal precioVenta,
         boolean vendible,
+        boolean reservable,
+        BigDecimal descuentoApartadoPorcentaje,
         Set<Long> disciplinaIds
 ) {}

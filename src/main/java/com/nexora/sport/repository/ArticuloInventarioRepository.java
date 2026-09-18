@@ -20,6 +20,8 @@ public interface ArticuloInventarioRepository extends JpaRepository<ArticuloInve
 
     List<ArticuloInventario> findByCentroIdAndVendibleTrueAndActivoTrueAndDeletedAtIsNull(Long centroId);
 
+    List<ArticuloInventario> findByCentroIdAndReservableTrueAndActivoTrueAndDeletedAtIsNull(Long centroId);
+
     @Query("select a from ArticuloInventario a where a.centro.id = :centroId and a.deletedAt is null " +
            "and a.stock <= a.stockMinimo")
     List<ArticuloInventario> findConStockBajo(@Param("centroId") Long centroId);

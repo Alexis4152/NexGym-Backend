@@ -126,6 +126,22 @@ public class CajaService {
         return movimientoRepository.save(m);
     }
 
+    @Transactional
+    public MovimientoFinanciero registrarIngresoDeVenta(Long centroId, Venta venta, Usuario registradoPor) {
+        CategoriaMovimiento categoria = categoriaRepository.findByCentroIdAndNombreAndTipo(centroId, "Venta de producto", TipoMovimiento.INGRESO)
+                .orElseThrow(() -> new ResourceNotFoundException("Categoria 'Venta de producto' no configurada"));
+        MovimientoFinanciero m = new MovimientoFinanciero();
+        m.setCentro(centroRepository.getReferenceById(centroId));
+        m.setCategoria(categoria);
+        m.setTipo(TipoMovimiento.INGRESO);
+        m.setMonto(venta.getTotal());
+        m.setMetodoPago(venta.getMetodoPago());
+        m.setDescripcion("Venta de tienda #" + venta.getId()
+                + (venta.getClienteNombre() != null && !venta.getClienteNombre().isBlank() ? " - " + venta.getClienteNombre() : ""));
+        m.setRegistradoPor(registradoPor);
+        return movimientoRepository.save(m);
+    }
+
     private MovimientoFinanciero construir(Long centroId, TipoMovimiento tipo, CategoriaMovimiento categoria,
                                             MovimientoFinancieroRequest request) {
         MovimientoFinanciero m = new MovimientoFinanciero();

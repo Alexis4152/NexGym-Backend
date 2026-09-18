@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /** Un centro deportivo / gimnasio: la frontera de tenant de todo el sistema. */
@@ -43,6 +44,18 @@ public class Centro {
 
     @Column(nullable = false)
     private boolean activo = true;
+
+    @Column(name = "apartados_activo", nullable = false)
+    private boolean apartadosActivo = false;
+
+    @Column(name = "horas_apartado_default", nullable = false)
+    private int horasApartadoDefault = 24;
+
+    @Column(name = "monto_maximo_descuento_apartado", precision = 10, scale = 2)
+    private BigDecimal montoMaximoDescuentoApartado;
+
+    @Column(name = "porcentaje_maximo_descuento_apartado", precision = 5, scale = 2)
+    private BigDecimal porcentajeMaximoDescuentoApartado;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();

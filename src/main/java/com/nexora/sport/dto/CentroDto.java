@@ -1,5 +1,7 @@
 package com.nexora.sport.dto;
 
+import java.math.BigDecimal;
+
 public record CentroDto(
         Long id,
         String nombre,
@@ -10,5 +12,9 @@ public record CentroDto(
         String telefono,
         String emailContacto,
         String direccion,
-        boolean activo
+        boolean activo,
+        boolean apartadosActivo,
+        int horasApartadoDefault,
+        BigDecimal montoMaximoDescuentoApartado,
+        BigDecimal porcentajeMaximoDescuentoApartado
 ) {}

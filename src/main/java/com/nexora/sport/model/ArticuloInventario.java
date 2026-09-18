@@ -62,6 +62,12 @@ public class ArticuloInventario {
     private String imagenUrl;
 
     @Column(nullable = false)
+    private boolean reservable = false;
+
+    @Column(name = "descuento_apartado_porcentaje", precision = 5, scale = 2)
+    private BigDecimal descuentoApartadoPorcentaje;
+
+    @Column(nullable = false)
     private boolean activo = true;
 
     @Column(name = "deleted_at")

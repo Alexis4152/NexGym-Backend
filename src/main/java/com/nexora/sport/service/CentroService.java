@@ -67,6 +67,10 @@ public class CentroService {
         centro.setDireccion(request.direccion());
         if (request.colorPrimario() != null) centro.setColorPrimario(request.colorPrimario());
         if (request.catalogoPublicoActivo() != null) centro.setCatalogoPublicoActivo(request.catalogoPublicoActivo());
+        if (request.apartadosActivo() != null) centro.setApartadosActivo(request.apartadosActivo());
+        if (request.horasApartadoDefault() != null) centro.setHorasApartadoDefault(request.horasApartadoDefault());
+        centro.setMontoMaximoDescuentoApartado(request.montoMaximoDescuentoApartado());
+        centro.setPorcentajeMaximoDescuentoApartado(request.porcentajeMaximoDescuentoApartado());
 
         String slug = request.slugPublico();
         if (slug == null || slug.isBlank()) {
@@ -93,6 +97,7 @@ public class CentroService {
     public CentroDto toDto(Centro c) {
         return new CentroDto(c.getId(), c.getNombre(), c.getSlugPublico(), c.isCatalogoPublicoActivo(),
                 c.getColorPrimario(), c.getLogoUrl(), c.getTelefono(), c.getEmailContacto(), c.getDireccion(),
-                c.isActivo());
+                c.isActivo(), c.isApartadosActivo(), c.getHorasApartadoDefault(),
+                c.getMontoMaximoDescuentoApartado(), c.getPorcentajeMaximoDescuentoApartado());
     }
 }

@@ -1,10 +1,13 @@
 package com.nexora.sport.service;
 
+import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -35,6 +38,23 @@ public class MailService {
             mailSender.send(message);
         } catch (Exception e) {
             log.warn("No se pudo enviar correo a {}: {}", to, e.getMessage());
+        }
+    }
+
+    @Async
+    public void enviarConAdjunto(String to, String subject, String body, String nombreArchivo, byte[] adjunto) {
+        if (to == null || to.isBlank() || fromAddress == null || fromAddress.isBlank()) return;
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromAddress);
+            helper.setTo(to);
+            helper.setSubject(subject);
+            helper.setText(body);
+            helper.addAttachment(nombreArchivo, new ByteArrayResource(adjunto));
+            mailSender.send(message);
+        } catch (Exception e) {
+            log.warn("No se pudo enviar correo con adjunto a {}: {}", to, e.getMessage());
         }
     }
 }
