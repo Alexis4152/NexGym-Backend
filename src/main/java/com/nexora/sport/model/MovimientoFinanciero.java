@@ -68,6 +68,21 @@ public class MovimientoFinanciero {
     @JoinColumn(name = "registrado_por")
     private Usuario registradoPor;
 
+    /**
+     * Soft-void: true cuando el origen del movimiento (ej. un pago de membresia) se
+     * cancelo/reverso. Nunca se borra la fila (trazabilidad); se excluye de sumas y
+     * listados normales via CajaService/MovimientoFinancieroRepository.
+     */
+    @Column(nullable = false)
+    private boolean anulado = false;
+
+    @Column(name = "anulado_en")
+    private LocalDateTime anuladoEn;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "anulado_por")
+    private Usuario anuladoPor;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 }

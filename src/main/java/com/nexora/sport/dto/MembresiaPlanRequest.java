@@ -9,12 +9,15 @@ import java.util.Set;
 
 public record MembresiaPlanRequest(
         @NotBlank String nombre,
-        @NotNull String tipoPeriodo,
-        Integer duracionDias,
+        @NotNull String tipoPlan,
+        Integer duracionCantidad,
+        String duracionUnidad,
         Integer numeroClasesIncluidas,
         @NotNull @Positive BigDecimal precio,
-        boolean multidisciplina,
         boolean accesoCompleto,
+        Integer maxDisciplinasSeleccionables,
+        boolean permiteAbonos,
+        BigDecimal montoMinimoAbono,
         Integer limiteAlumnos,
         Set<Long> disciplinaIds
 ) {}

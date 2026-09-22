@@ -1,16 +1,21 @@
 package com.nexora.sport.controller;
 
 import com.nexora.sport.dto.ApiResponse;
+import com.nexora.sport.dto.DocumentoInstructorDto;
 import com.nexora.sport.dto.InstructorDto;
 import com.nexora.sport.dto.InstructorRequest;
 import com.nexora.sport.dto.PageResponse;
 import com.nexora.sport.model.Usuario;
+import com.nexora.sport.service.DocumentoInstructorService;
 import com.nexora.sport.service.InstructorService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/instructores")
@@ -18,9 +23,11 @@ import org.springframework.web.bind.annotation.*;
 public class InstructorController {
 
     private final InstructorService instructorService;
+    private final DocumentoInstructorService documentoInstructorService;
 
-    public InstructorController(InstructorService instructorService) {
+    public InstructorController(InstructorService instructorService, DocumentoInstructorService documentoInstructorService) {
         this.instructorService = instructorService;
+        this.documentoInstructorService = documentoInstructorService;
     }
 
     @GetMapping
@@ -45,5 +52,23 @@ public class InstructorController {
     public ApiResponse<Void> desactivar(@PathVariable Long id) {
         instructorService.desactivar(id);
         return ApiResponse.ok("Instructor desactivado", null);
+    }
+
+    @GetMapping("/{id}/documentos")
+    public ApiResponse<List<DocumentoInstructorDto>> listarDocumentos(@PathVariable Long id) {
+        return ApiResponse.ok(documentoInstructorService.listar(id));
+    }
+
+    @PostMapping("/{id}/documentos")
+    public ApiResponse<DocumentoInstructorDto> subirDocumento(@PathVariable Long id,
+                                                               @RequestParam Long disciplinaId,
+                                                               @RequestParam("file") MultipartFile file) {
+        return ApiResponse.ok("Documento subido", documentoInstructorService.subir(id, disciplinaId, file));
+    }
+
+    @DeleteMapping("/{id}/documentos/{documentoId}")
+    public ApiResponse<Void> eliminarDocumento(@PathVariable Long id, @PathVariable Long documentoId) {
+        documentoInstructorService.eliminar(id, documentoId);
+        return ApiResponse.ok("Documento eliminado", null);
     }
 }

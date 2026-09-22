@@ -53,6 +53,10 @@ public class ReservaService {
         if (reservaRepository.existsByClaseIdAndAlumnoIdAndFecha(clase.getId(), alumno.getId(), request.fecha())) {
             throw new IllegalStateException("El alumno ya tiene una reserva para esa clase y fecha");
         }
+        if (reservaRepository.existeConflictoHorarioAlumno(alumno.getId(), request.fecha(),
+                clase.getHoraInicio(), clase.getHoraFin(), EstadoReserva.CANCELADA)) {
+            throw new IllegalStateException("El alumno ya tiene otra clase inscrita en ese mismo horario");
+        }
         long ocupadas = reservaRepository.countByClaseIdAndFechaAndEstadoNot(clase.getId(), request.fecha(), EstadoReserva.CANCELADA);
         if (ocupadas >= clase.getCapacidadMaxima()) {
             throw new IllegalStateException("La clase ya alcanzo su capacidad maxima para esa fecha");

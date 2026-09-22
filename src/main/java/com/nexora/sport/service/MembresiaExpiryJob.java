@@ -3,7 +3,11 @@ package com.nexora.sport.service;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/** Corre una vez al dia y marca VENCIDA cualquier membresia activa que ya paso su fecha_fin. */
+/**
+ * Corre una vez al dia: marca VENCIDA cualquier membresia activa que ya paso su
+ * fecha_fin, y activa cualquier PENDIENTE cuya fecha_inicio ya llego (ver
+ * renovacion anticipada, MembresiaService#renovar).
+ */
 @Component
 public class MembresiaExpiryJob {
 
@@ -14,7 +18,8 @@ public class MembresiaExpiryJob {
     }
 
     @Scheduled(cron = "0 5 0 * * *")
-    public void marcarVencidas() {
+    public void actualizarEstados() {
+        membresiaService.activarPendientes(null);
         membresiaService.actualizarVencidas(null);
     }
 }

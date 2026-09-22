@@ -57,6 +57,15 @@ public class Centro {
     @Column(name = "porcentaje_maximo_descuento_apartado", precision = 5, scale = 2)
     private BigDecimal porcentajeMaximoDescuentoApartado;
 
+    /**
+     * Politica global del centro: si un alumno con saldo pendiente puede seguir
+     * accediendo (check-in). Vive aqui (no en Plan/Membresia) porque es una decision
+     * operativa del gimnasio, igual que apartadosActivo. El futuro modulo de
+     * Asistencia es quien debera leerla; por ahora solo se deja disponible.
+     */
+    @Column(name = "permitir_acceso_con_adeudo", nullable = false)
+    private boolean permitirAccesoConAdeudo = true;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 }

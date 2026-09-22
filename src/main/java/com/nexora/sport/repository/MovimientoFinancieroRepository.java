@@ -13,13 +13,13 @@ import java.time.LocalDate;
 
 public interface MovimientoFinancieroRepository extends JpaRepository<MovimientoFinanciero, Long> {
 
-    Page<MovimientoFinanciero> findByCentroIdOrderByFechaDesc(Long centroId, Pageable pageable);
+    Page<MovimientoFinanciero> findByCentroIdAndAnuladoFalseOrderByFechaDesc(Long centroId, Pageable pageable);
 
-    Page<MovimientoFinanciero> findByCentroIdAndFechaBetweenOrderByFechaDesc(
+    Page<MovimientoFinanciero> findByCentroIdAndFechaBetweenAndAnuladoFalseOrderByFechaDesc(
             Long centroId, LocalDate desde, LocalDate hasta, Pageable pageable);
 
     @Query("select coalesce(sum(m.monto), 0) from MovimientoFinanciero m " +
-           "where m.centro.id = :centroId and m.tipo = :tipo and m.fecha between :desde and :hasta")
+           "where m.centro.id = :centroId and m.tipo = :tipo and m.fecha between :desde and :hasta and m.anulado = false")
     BigDecimal sumMontoByTipoAndRango(@Param("centroId") Long centroId,
                                        @Param("tipo") TipoMovimiento tipo,
                                        @Param("desde") LocalDate desde,

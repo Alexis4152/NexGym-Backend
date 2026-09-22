@@ -44,13 +44,14 @@ public class MembresiaPlanController {
     }
 
     @PutMapping("/{id}")
-    public ApiResponse<MembresiaPlanDto> actualizar(@PathVariable Long id, @Valid @RequestBody MembresiaPlanRequest request) {
-        return ApiResponse.ok("Plan actualizado", membresiaPlanService.actualizar(id, request));
+    public ApiResponse<MembresiaPlanDto> actualizar(@AuthenticationPrincipal Usuario actor, @PathVariable Long id,
+                                                     @Valid @RequestBody MembresiaPlanRequest request) {
+        return ApiResponse.ok("Plan actualizado", membresiaPlanService.actualizar(actor, id, request));
     }
 
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> desactivar(@PathVariable Long id) {
-        membresiaPlanService.desactivar(id);
+    public ApiResponse<Void> desactivar(@AuthenticationPrincipal Usuario actor, @PathVariable Long id) {
+        membresiaPlanService.desactivar(actor, id);
         return ApiResponse.ok("Plan desactivado", null);
     }
 }

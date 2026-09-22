@@ -90,8 +90,8 @@ public class CajaService {
     public PageResponse<MovimientoFinancieroDto> listarMovimientos(Usuario actor, LocalDate desde, LocalDate hasta, Pageable pageable) {
         Long centroId = tenantScope.scopeId(actor);
         var page = (desde != null && hasta != null)
-                ? movimientoRepository.findByCentroIdAndFechaBetweenOrderByFechaDesc(centroId, desde, hasta, pageable)
-                : movimientoRepository.findByCentroIdOrderByFechaDesc(centroId, pageable);
+                ? movimientoRepository.findByCentroIdAndFechaBetweenAndAnuladoFalseOrderByFechaDesc(centroId, desde, hasta, pageable)
+                : movimientoRepository.findByCentroIdAndAnuladoFalseOrderByFechaDesc(centroId, pageable);
         return PageResponse.of(page, this::toDto);
     }
 
@@ -119,11 +119,28 @@ public class CajaService {
         m.setTipo(TipoMovimiento.INGRESO);
         m.setMonto(monto);
         m.setMetodoPago(metodoPago != null ? metodoPago : MetodoPago.EFECTIVO);
-        m.setDescripcion("Pago de membresia: " + membresia.getPlan().getNombre());
+        m.setDescripcion("Pago de membresia: " + membresia.getPlanNombreSnapshot());
         m.setAlumno(membresia.getAlumno());
         m.setMembresia(membresia);
         m.setRegistradoPor(registradoPor);
         return movimientoRepository.save(m);
+    }
+
+    /**
+     * Anula (soft-void) un movimiento sin borrarlo, para revertir su efecto en sumas y
+     * listados conservando trazabilidad. Usado hoy por PagoMembresiaService al cancelar
+     * un pago/abono; queda disponible para cualquier otro flujo que necesite lo mismo
+     * (ej. cancelacion de ventas, que hoy no revierte su movimiento).
+     */
+    @Transactional
+    public void anularMovimiento(Long movimientoId, Usuario actor) {
+        MovimientoFinanciero m = movimientoRepository.findById(movimientoId)
+                .orElseThrow(() -> new ResourceNotFoundException("Movimiento no encontrado"));
+        if (m.isAnulado()) return;
+        m.setAnulado(true);
+        m.setAnuladoEn(java.time.LocalDateTime.now());
+        m.setAnuladoPor(actor);
+        movimientoRepository.save(m);
     }
 
     @Transactional

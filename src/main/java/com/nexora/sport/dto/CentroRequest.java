@@ -16,5 +16,6 @@ public record CentroRequest(
         Boolean apartadosActivo,
         Integer horasApartadoDefault,
         BigDecimal montoMaximoDescuentoApartado,
-        BigDecimal porcentajeMaximoDescuentoApartado
+        BigDecimal porcentajeMaximoDescuentoApartado,
+        Boolean permitirAccesoConAdeudo
 ) {}
