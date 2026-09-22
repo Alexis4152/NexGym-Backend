@@ -66,6 +66,10 @@ public class Centro {
     @Column(name = "permitir_acceso_con_adeudo", nullable = false)
     private boolean permitirAccesoConAdeudo = true;
 
+    /** Dias sin asistir para que una membresia activa aparezca en el reporte de riesgo de abandono. */
+    @Column(name = "dias_inactividad_riesgo", nullable = false)
+    private int diasInactividadRiesgo = 14;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 }

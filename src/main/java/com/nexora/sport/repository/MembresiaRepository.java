@@ -21,6 +21,8 @@ public interface MembresiaRepository extends JpaRepository<Membresia, Long> {
 
     long countByCentroIdAndEstado(Long centroId, EstadoMembresia estado);
 
+    List<Membresia> findByCentroIdAndEstado(Long centroId, EstadoMembresia estado);
+
     @Query("select m from Membresia m where m.centro.id = :centroId and m.estado = 'ACTIVA' " +
            "and m.fechaFin between :hoy and :limite order by m.fechaFin asc")
     List<Membresia> findProximasAVencer(@Param("centroId") Long centroId,
@@ -48,4 +50,35 @@ public interface MembresiaRepository extends JpaRepository<Membresia, Long> {
 
     /** true si alguna otra membresia la referencia como membresiaAnterior (para el indicador "renovada"). */
     boolean existsByMembresiaAnteriorId(Long membresiaAnteriorId);
+
+    /** Cartera: toda membresia con posibilidad de tener saldo (CANCELADA se excluye, no se cobra mas). */
+    @Query("select m from Membresia m where m.centro.id = :centroId and m.estado <> com.nexora.sport.model.EstadoMembresia.CANCELADA")
+    List<Membresia> findParaCartera(@Param("centroId") Long centroId);
+
+    /** "Ventas" de membresia = contrataciones NUEVAS (no renovaciones) creadas en el periodo. */
+    @Query("select m from Membresia m where m.centro.id = :centroId and m.membresiaAnterior is null " +
+           "and m.createdAt >= :desde and m.createdAt < :hasta")
+    List<Membresia> findNuevasEnPeriodo(@Param("centroId") Long centroId, @Param("desde") java.time.LocalDateTime desde, @Param("hasta") java.time.LocalDateTime hasta);
+
+    @Query("select m from Membresia m where m.centro.id = :centroId and m.membresiaAnterior is not null " +
+           "and m.createdAt >= :desde and m.createdAt < :hasta")
+    List<Membresia> findRenovacionesEnPeriodo(@Param("centroId") Long centroId, @Param("desde") java.time.LocalDateTime desde, @Param("hasta") java.time.LocalDateTime hasta);
+
+    /** Elegibles para retencion: vencieron dentro del rango y no fueron canceladas antes de vencer. */
+    @Query("select m from Membresia m where m.centro.id = :centroId and m.fechaFin between :desde and :hasta " +
+           "and m.estado <> com.nexora.sport.model.EstadoMembresia.CANCELADA")
+    List<Membresia> findElegiblesParaRetencion(@Param("centroId") Long centroId, @Param("desde") LocalDate desde, @Param("hasta") LocalDate hasta);
+
+    /** Todas las membresias (de cualquier estado no cancelado) de un alumno, para el calculo de renovacion en retencion. */
+    @Query("select m from Membresia m where m.alumno.id = :alumnoId and m.estado <> com.nexora.sport.model.EstadoMembresia.CANCELADA")
+    List<Membresia> findNoCanceladasPorAlumno(@Param("alumnoId") Long alumnoId);
+
+    /** Base para "riesgo de abandono": membresias con vigencia real (fecha_fin no nula) actualmente activas. */
+    @Query("select m from Membresia m where m.centro.id = :centroId and m.estado = com.nexora.sport.model.EstadoMembresia.ACTIVA and m.fechaFin is not null")
+    List<Membresia> findActivasConFechaFin(@Param("centroId") Long centroId);
+
+    /** Para "Disciplinas": membresias ACTIVA que incluyen una disciplina dada (via membresia_disciplinas), o accesoCompleto. */
+    @Query("select m from Membresia m where m.centro.id = :centroId and m.estado = com.nexora.sport.model.EstadoMembresia.ACTIVA " +
+           "and (m.plan.accesoCompleto = true or :disciplinaId in (select d.id from m.disciplinas d))")
+    List<Membresia> findActivasPorDisciplina(@Param("centroId") Long centroId, @Param("disciplinaId") Long disciplinaId);
 }

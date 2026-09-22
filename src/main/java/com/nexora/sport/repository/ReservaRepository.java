@@ -29,4 +29,6 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
     boolean existeConflictoHorarioAlumno(@Param("alumnoId") Long alumnoId, @Param("fecha") LocalDate fecha,
                                         @Param("horaInicio") LocalTime horaInicio, @Param("horaFin") LocalTime horaFin,
                                         @Param("estadoExcluido") EstadoReserva estadoExcluido);
+
+    long countByClaseIdAndFechaBetweenAndEstadoNot(Long claseId, LocalDate desde, LocalDate hasta, EstadoReserva estadoExcluido);
 }

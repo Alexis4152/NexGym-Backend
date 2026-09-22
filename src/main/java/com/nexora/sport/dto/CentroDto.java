@@ -17,5 +17,6 @@ public record CentroDto(
         int horasApartadoDefault,
         BigDecimal montoMaximoDescuentoApartado,
         BigDecimal porcentajeMaximoDescuentoApartado,
-        boolean permitirAccesoConAdeudo
+        boolean permitirAccesoConAdeudo,
+        int diasInactividadRiesgo
 ) {}

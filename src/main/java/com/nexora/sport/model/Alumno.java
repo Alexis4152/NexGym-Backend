@@ -57,6 +57,14 @@ public class Alumno {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
+    /**
+     * Momento de la baja mas reciente (estado paso a INACTIVO/SUSPENDIDO). NO se limpia
+     * al reactivarse (se conserva como historial), igual que Membresia#suspendidaMotivo.
+     * Es el unico evento realmente timestamped para el reporte de "bajas por periodo".
+     */
+    @Column(name = "fecha_baja")
+    private LocalDateTime fechaBaja;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "alumno_disciplinas",

@@ -72,6 +72,7 @@ public class CentroService {
         centro.setMontoMaximoDescuentoApartado(request.montoMaximoDescuentoApartado());
         centro.setPorcentajeMaximoDescuentoApartado(request.porcentajeMaximoDescuentoApartado());
         if (request.permitirAccesoConAdeudo() != null) centro.setPermitirAccesoConAdeudo(request.permitirAccesoConAdeudo());
+        if (request.diasInactividadRiesgo() != null) centro.setDiasInactividadRiesgo(request.diasInactividadRiesgo());
 
         String slug = request.slugPublico();
         if (slug == null || slug.isBlank()) {
@@ -100,6 +101,6 @@ public class CentroService {
                 c.getColorPrimario(), c.getLogoUrl(), c.getTelefono(), c.getEmailContacto(), c.getDireccion(),
                 c.isActivo(), c.isApartadosActivo(), c.getHorasApartadoDefault(),
                 c.getMontoMaximoDescuentoApartado(), c.getPorcentajeMaximoDescuentoApartado(),
-                c.isPermitirAccesoConAdeudo());
+                c.isPermitirAccesoConAdeudo(), c.getDiasInactividadRiesgo());
     }
 }

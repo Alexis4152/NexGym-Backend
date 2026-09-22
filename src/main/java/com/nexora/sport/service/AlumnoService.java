@@ -73,6 +73,7 @@ public class AlumnoService {
     public void desactivar(Long id) {
         Alumno alumno = buscar(id);
         alumno.setEstado(EstadoAlumno.INACTIVO);
+        alumno.setFechaBaja(java.time.LocalDateTime.now());
         alumnoRepository.save(alumno);
     }
 
@@ -84,7 +85,14 @@ public class AlumnoService {
         alumno.setContactoEmergenciaNombre(request.contactoEmergenciaNombre());
         alumno.setContactoEmergenciaTelefono(request.contactoEmergenciaTelefono());
         alumno.setObservaciones(request.observaciones());
-        if (request.estado() != null) alumno.setEstado(EstadoAlumno.valueOf(request.estado()));
+        if (request.estado() != null) {
+            EstadoAlumno nuevoEstado = EstadoAlumno.valueOf(request.estado());
+            // Registra el momento de la baja mas reciente; no se limpia al reactivarse (ver Alumno#fechaBaja).
+            if (nuevoEstado != EstadoAlumno.ACTIVO && alumno.getEstado() == EstadoAlumno.ACTIVO) {
+                alumno.setFechaBaja(java.time.LocalDateTime.now());
+            }
+            alumno.setEstado(nuevoEstado);
+        }
         Set<Disciplina> disciplinas = new HashSet<>();
         if (request.disciplinaIds() != null) {
             request.disciplinaIds().forEach(id -> disciplinas.add(disciplinaRepository.getReferenceById(id)));
