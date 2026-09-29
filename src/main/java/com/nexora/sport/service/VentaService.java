@@ -10,6 +10,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /** Punto de venta: registra ventas de mostrador, descuenta inventario y las liga a Caja. */
@@ -51,6 +53,16 @@ public class VentaService {
     @Transactional(readOnly = true)
     public PageResponse<VentaDto> listar(Usuario actor, Pageable pageable) {
         return PageResponse.of(ventaRepository.findByCentroIdOrderByCreatedAtDesc(tenantScope.scopeId(actor), pageable), this::toDto);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<VentaDto> listar(Usuario actor, LocalDate desde, LocalDate hasta, String cliente,
+                                          MetodoPago metodoPago, EstadoVenta estado, Pageable pageable) {
+        Long centroId = tenantScope.scopeId(actor);
+        LocalDateTime desdeFecha = desde != null ? desde.atStartOfDay() : null;
+        LocalDateTime hastaFecha = hasta != null ? hasta.plusDays(1).atStartOfDay() : null;
+        String texto = (cliente == null || cliente.isBlank()) ? null : cliente;
+        return PageResponse.of(ventaRepository.buscar(centroId, desdeFecha, hastaFecha, texto, metodoPago, estado, pageable), this::toDto);
     }
 
     public Venta buscar(Long id) {
@@ -150,7 +162,8 @@ public class VentaService {
             movimientoInventarioRepository.save(mov);
         }
 
-        cajaService.registrarIngresoDeVenta(centroId, venta, actor);
+        venta.setMovimientoFinanciero(cajaService.registrarIngresoDeVenta(centroId, venta, actor));
+        venta = ventaRepository.save(venta);
 
         if ((venta.getTipoTicket() == TipoTicket.DIGITAL || venta.getTipoTicket() == TipoTicket.AMBOS)
                 && venta.getClienteEmail() != null && !venta.getClienteEmail().isBlank()) {
@@ -212,9 +225,8 @@ public class VentaService {
             venta.setCambio(montoRecibido.subtract(total));
         }
 
+        venta.setMovimientoFinanciero(cajaService.registrarIngresoDeVenta(centroId, venta, actor));
         venta = ventaRepository.save(venta);
-
-        cajaService.registrarIngresoDeVenta(centroId, venta, actor);
 
         if ((venta.getTipoTicket() == TipoTicket.DIGITAL || venta.getTipoTicket() == TipoTicket.AMBOS)
                 && venta.getClienteEmail() != null && !venta.getClienteEmail().isBlank()) {
@@ -228,8 +240,8 @@ public class VentaService {
 
     @Transactional
     public VentaDto cancelar(Long id, Usuario actor) {
-        if (!tenantScope.isAdminOSuperior(actor)) {
-            throw new IllegalStateException("Solo Dueno o Administrador puede cancelar una venta");
+        if (!com.nexora.sport.security.PermisoEvaluator.tiene(actor, com.nexora.sport.model.Permiso.VENTAS_CANCELAR)) {
+            throw new IllegalStateException("No tienes permiso para cancelar ventas");
         }
         Venta venta = buscar(id);
         if (venta.getEstado() != EstadoVenta.COMPLETADA) {
@@ -254,6 +266,13 @@ public class VentaService {
         venta.setEstado(EstadoVenta.CANCELADA);
         venta.setCanceladaPor(actor);
         venta.setCanceladaEn(java.time.LocalDateTime.now());
+        // Sin esto, el ingreso de una venta cancelada seguia contando en dashboard/reportes
+        // (que leen MovimientoFinanciero.anulado=false), aunque el corte de caja la excluyera
+        // correctamente por leer Venta.estado directo. Ver PagoMembresiaService#cancelarPago
+        // para el mismo patron ya usado con membresias.
+        if (venta.getMovimientoFinanciero() != null) {
+            cajaService.anularMovimiento(venta.getMovimientoFinanciero().getId(), actor);
+        }
         return toDto(ventaRepository.save(venta));
     }
 

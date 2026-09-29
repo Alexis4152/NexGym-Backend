@@ -40,8 +40,19 @@ public class CorteCajaService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<CorteCajaDto> listar(Usuario actor, Pageable pageable) {
-        return PageResponse.of(corteRepository.findByCentroId(tenantScope.scopeId(actor), pageable), this::toDto);
+    public PageResponse<CorteCajaDto> listar(Usuario actor, LocalDate desde, LocalDate hasta, String estado, Long usuarioId, Pageable pageable) {
+        Long centroId = tenantScope.scopeId(actor);
+        LocalDateTime desdeFecha = desde != null ? desde.atStartOfDay() : null;
+        LocalDateTime hastaFecha = hasta != null ? hasta.plusDays(1).atStartOfDay() : null;
+        EstadoCorteCaja estadoEnum = (estado != null && !estado.isBlank()) ? EstadoCorteCaja.valueOf(estado) : null;
+        return PageResponse.of(corteRepository.buscar(centroId, desdeFecha, hastaFecha, estadoEnum, usuarioId, pageable), this::toDto);
+    }
+
+    /** Cajeros para el filtro (homologado con DemoPV): no requiere seccion USUARIOS. */
+    @Transactional(readOnly = true)
+    public List<CajeroDto> cajeros(Usuario actor) {
+        return corteRepository.cajerosDelCentro(tenantScope.scopeId(actor)).stream()
+                .map(u -> new CajeroDto(u.getId(), u.getNombre())).toList();
     }
 
     public CorteCaja buscar(Long id) {

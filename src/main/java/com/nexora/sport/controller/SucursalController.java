@@ -43,13 +43,14 @@ public class SucursalController {
     }
 
     @PutMapping("/{id}")
-    public ApiResponse<SucursalDto> actualizar(@PathVariable Long id, @Valid @RequestBody SucursalRequest request) {
-        return ApiResponse.ok("Sucursal actualizada", sucursalService.actualizar(id, request));
+    public ApiResponse<SucursalDto> actualizar(@AuthenticationPrincipal Usuario actor, @PathVariable Long id,
+                                                 @Valid @RequestBody SucursalRequest request) {
+        return ApiResponse.ok("Sucursal actualizada", sucursalService.actualizar(actor, id, request));
     }
 
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> desactivar(@PathVariable Long id) {
-        sucursalService.desactivar(id);
+    public ApiResponse<Void> desactivar(@AuthenticationPrincipal Usuario actor, @PathVariable Long id) {
+        sucursalService.desactivar(actor, id);
         return ApiResponse.ok("Sucursal desactivada", null);
     }
 }

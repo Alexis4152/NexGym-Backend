@@ -7,5 +7,8 @@ import java.util.Set;
 
 public record RolRequest(
         @NotBlank String nombre,
-        @NotEmpty Set<String> secciones
+        @NotEmpty Set<String> secciones,
+        /** "ADMIN" u "OPERATIVO" unicamente — un rol creado desde aqui nunca puede ser SUPERVISOR ni SUPER_ADMIN (seccion 23 del encargo). Null = OPERATIVO. */
+        String nivel,
+        Set<String> permisos
 ) {}

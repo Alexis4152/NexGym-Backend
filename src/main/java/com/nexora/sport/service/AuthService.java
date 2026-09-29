@@ -94,6 +94,7 @@ public class AuthService {
     @Transactional
     public void forgotPassword(String email) {
         usuarioRepository.findByEmailAndDeletedAtIsNull(email).ifPresent(usuario -> {
+            passwordResetTokenRepository.invalidateAllForUser(usuario.getId());
             PasswordResetToken token = new PasswordResetToken();
             token.setUsuario(usuario);
             token.setToken(PasswordGenerator.generateToken());

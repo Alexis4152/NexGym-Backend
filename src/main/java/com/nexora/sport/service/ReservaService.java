@@ -22,15 +22,17 @@ public class ReservaService {
     private final AlumnoRepository alumnoRepository;
     private final CentroRepository centroRepository;
     private final TenantScope tenantScope;
+    private final NotificacionService notificacionService;
 
     public ReservaService(ReservaRepository reservaRepository, ClaseRepository claseRepository,
                            AlumnoRepository alumnoRepository, CentroRepository centroRepository,
-                           TenantScope tenantScope) {
+                           TenantScope tenantScope, NotificacionService notificacionService) {
         this.reservaRepository = reservaRepository;
         this.claseRepository = claseRepository;
         this.alumnoRepository = alumnoRepository;
         this.centroRepository = centroRepository;
         this.tenantScope = tenantScope;
+        this.notificacionService = notificacionService;
     }
 
     @Transactional(readOnly = true)
@@ -67,14 +69,25 @@ public class ReservaService {
         reserva.setClase(clase);
         reserva.setAlumno(alumno);
         reserva.setFecha(request.fecha());
-        return toDto(reservaRepository.save(reserva));
+        reserva = reservaRepository.save(reserva);
+
+        notificacionService.notificarReservaConfirmada(reserva);
+        if (ocupadas + 1 == clase.getCapacidadMaxima()) {
+            notificacionService.notificarAdminCupoLleno(clase, request.fecha());
+        }
+        return toDto(reserva);
     }
 
     @Transactional
     public ReservaDto cambiarEstado(Long id, EstadoReserva estado) {
         Reserva reserva = buscar(id);
+        EstadoReserva anterior = reserva.getEstado();
         reserva.setEstado(estado);
-        return toDto(reservaRepository.save(reserva));
+        reserva = reservaRepository.save(reserva);
+        if (estado == EstadoReserva.CANCELADA && anterior != EstadoReserva.CANCELADA) {
+            notificacionService.notificarReservaCancelada(reserva);
+        }
+        return toDto(reserva);
     }
 
     public Reserva buscar(Long id) {

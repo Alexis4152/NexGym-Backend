@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class SucursalService {
@@ -31,23 +32,45 @@ public class SucursalService {
         this.tenantScope = tenantScope;
     }
 
+    /** Un Admin/Operativo solo ve las sucursales que tiene asignadas (su "hogar" +
+     * adicionales), nunca todas las del centro (seccion 27 del encargo de jerarquias):
+     * "no podran ver las sucursales, solo su sucursal". Dueno/SUPER_ADMIN sin cambios. */
     @Transactional(readOnly = true)
     public PageResponse<SucursalDto> listar(Usuario actor, Pageable pageable) {
-        return PageResponse.of(sucursalRepository.findByCentroId(tenantScope.scopeId(actor), pageable), this::toDto);
+        Long centroId = tenantScope.scopeId(actor);
+        Set<Long> permitidas = tenantScope.sucursalesPermitidas(actor);
+        var page = permitidas == null
+                ? sucursalRepository.findByCentroId(centroId, pageable)
+                : sucursalRepository.findByCentroIdAndIdIn(centroId, permitidas, pageable);
+        return PageResponse.of(page, this::toDto);
     }
 
     @Transactional(readOnly = true)
     public List<SucursalDto> listarActivas(Usuario actor) {
-        return sucursalRepository.findByCentroIdAndActivoTrueOrderByNombre(tenantScope.scopeId(actor)).stream()
-                .map(this::toDto).toList();
+        Long centroId = tenantScope.scopeId(actor);
+        Set<Long> permitidas = tenantScope.sucursalesPermitidas(actor);
+        var lista = permitidas == null
+                ? sucursalRepository.findByCentroIdAndActivoTrueOrderByNombre(centroId)
+                : sucursalRepository.findByCentroIdAndIdInAndActivoTrueOrderByNombre(centroId, permitidas);
+        return lista.stream().map(this::toDto).toList();
     }
 
     public Sucursal buscar(Long id) {
         return sucursalRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada"));
     }
 
+    /** Crear/editar/desactivar sucursales es exclusivo del Dueno del negocio (SUPERVISOR)
+     * o de la plataforma (SUPER_ADMIN) -- un Admin/encargado de sucursal NUNCA puede
+     * activar, desactivar ni editar nada de ninguna sucursal, ni siquiera la suya. */
+    private void assertPuedeAdministrarSucursales(Usuario actor) {
+        if (!tenantScope.isSupervisorOSuperior(actor)) {
+            throw new IllegalStateException("Solo el dueno del centro puede administrar sucursales");
+        }
+    }
+
     @Transactional
     public SucursalDto crear(Usuario actor, SucursalRequest request) {
+        assertPuedeAdministrarSucursales(actor);
         Sucursal s = new Sucursal();
         s.setCentro(centroRepository.getReferenceById(tenantScope.scopeId(actor)));
         aplicar(s, request);
@@ -55,14 +78,16 @@ public class SucursalService {
     }
 
     @Transactional
-    public SucursalDto actualizar(Long id, SucursalRequest request) {
+    public SucursalDto actualizar(Usuario actor, Long id, SucursalRequest request) {
+        assertPuedeAdministrarSucursales(actor);
         Sucursal s = buscar(id);
         aplicar(s, request);
         return toDto(sucursalRepository.save(s));
     }
 
     @Transactional
-    public void desactivar(Long id) {
+    public void desactivar(Usuario actor, Long id) {
+        assertPuedeAdministrarSucursales(actor);
         Sucursal s = buscar(id);
         s.setActivo(false);
         sucursalRepository.save(s);

@@ -59,7 +59,18 @@ CREATE TABLE IF NOT EXISTS centros (
     monto_maximo_descuento_apartado         NUMERIC(10,2),
     porcentaje_maximo_descuento_apartado    NUMERIC(5,2),
     apartados_activo                        BOOLEAN NOT NULL DEFAULT FALSE,
-    horas_apartado_default                  INTEGER NOT NULL DEFAULT 24
+    horas_apartado_default                  INTEGER NOT NULL DEFAULT 24,
+    permitir_acceso_con_adeudo              BOOLEAN NOT NULL DEFAULT TRUE,
+    dias_inactividad_riesgo                 INTEGER NOT NULL DEFAULT 14,
+    -- Config de notificaciones proactivas (ver migration_notificaciones_v1.sql: estas
+    -- son NOT NULL con DEFAULT y la tabla ya tenia filas, por eso viven en ese script
+    -- via ALTER TABLE en vez de que ddl-auto=update las agregara solo).
+    notificaciones_membresia_activo         BOOLEAN NOT NULL DEFAULT TRUE,
+    notificaciones_clase_activo             BOOLEAN NOT NULL DEFAULT TRUE,
+    notificaciones_email_activo             BOOLEAN NOT NULL DEFAULT TRUE,
+    notificaciones_interno_activo           BOOLEAN NOT NULL DEFAULT TRUE,
+    notificaciones_dias_antes_vencimiento   VARCHAR(60) DEFAULT '7,3,1,0',
+    notificaciones_horas_antes_clase        INTEGER DEFAULT 24
 );
 
 -- Rol por centro (autorizacion fina via role_secciones); centro_id NULL identifica
@@ -561,6 +572,52 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
     created_at  TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+-- El "item de campana": registro persistente de un evento (vencimiento, pago, reserva,
+-- clase, aviso administrativo...). destinatario_tipo decide como se interpreta:
+-- ALUMNO/INSTRUCTOR usan alumno_id/instructor_id (sin portal propio, solo referencia
+-- para historial/enlace); CENTRO_ADMIN es un broadcast visible para todo el staff del
+-- centro con acceso a la seccion NOTIFICACIONES, no apunta a un usuario especifico.
+-- dedupe_key es la defensa anti-duplicados de un proceso programado que corre mas de
+-- una vez (UNIQUE permite muchos NULL en Postgres, para los eventos inmediatos que no
+-- la necesitan). NOTA: a diferencia del resto del esquema (enums de Java mapeados a
+-- VARCHAR simple, sin CHECK), Hibernate 6 SI genero CHECK constraints automaticos para
+-- tipo/destinatario_tipo aqui — si se agrega un valor nuevo al enum de Java, hay que
+-- verificar que ddl-auto=update tambien actualice el CHECK (si no, hace falta un
+-- migration_*.sql que lo haga a mano).
+CREATE TABLE IF NOT EXISTS notificaciones (
+    id                  BIGSERIAL PRIMARY KEY,
+    centro_id           BIGINT NOT NULL REFERENCES centros(id),
+    tipo                VARCHAR(40) NOT NULL,
+    destinatario_tipo   VARCHAR(20) NOT NULL,
+    alumno_id           BIGINT REFERENCES alumnos(id),
+    instructor_id       BIGINT REFERENCES instructores(id),
+    titulo              VARCHAR(150) NOT NULL,
+    mensaje             VARCHAR(1000) NOT NULL,
+    entidad_tipo        VARCHAR(30),
+    entidad_id          BIGINT,
+    dedupe_key          VARCHAR(200) UNIQUE,
+    leida               BOOLEAN NOT NULL DEFAULT FALSE,
+    leida_en            TIMESTAMP,
+    interno_visible     BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at          TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- Un intento de entrega de una notificacion por un canal concreto (hoy solo EMAIL;
+-- WHATSAPP/PUSH/SMS declarados en el enum, sin implementacion). Separada de
+-- notificaciones para poder tener varios canales por evento sin duplicar
+-- titulo/mensaje, y trazar intentos/errores (ver NotificacionEmailDispatcher).
+CREATE TABLE IF NOT EXISTS notificacion_envios (
+    id                  BIGSERIAL PRIMARY KEY,
+    notificacion_id     BIGINT NOT NULL REFERENCES notificaciones(id),
+    canal               VARCHAR(20) NOT NULL,
+    estado              VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE',
+    destino             VARCHAR(150),
+    intentos            INTEGER NOT NULL DEFAULT 0,
+    enviado_en          TIMESTAMP,
+    error               VARCHAR(500),
+    created_at          TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 -- ============================================================
 --  Indices (los que ya existen hoy en la BD, ademas de los implicitos de cada
 --  PRIMARY KEY/UNIQUE declarado arriba)
@@ -575,6 +632,9 @@ CREATE INDEX IF NOT EXISTS idx_lugares_centro             ON lugares(centro_id);
 CREATE INDEX IF NOT EXISTS idx_membresias_alumno          ON membresias(alumno_id);
 CREATE INDEX IF NOT EXISTS idx_membresias_centro_estado   ON membresias(centro_id, estado);
 CREATE INDEX IF NOT EXISTS idx_movfin_centro_fecha        ON movimientos_financieros(centro_id, fecha);
+CREATE INDEX IF NOT EXISTS idx_notificaciones_centro_dest ON notificaciones(centro_id, destinatario_tipo, interno_visible, leida);
+CREATE INDEX IF NOT EXISTS idx_notificaciones_alumno      ON notificaciones(alumno_id);
+CREATE INDEX IF NOT EXISTS idx_notificacion_envios_estado ON notificacion_envios(estado, intentos);
 CREATE INDEX IF NOT EXISTS idx_reservas_clase_fecha       ON reservas(clase_id, fecha);
 CREATE INDEX IF NOT EXISTS idx_sucursales_centro          ON sucursales(centro_id);
 CREATE INDEX IF NOT EXISTS idx_usuarios_centro            ON usuarios(centro_id);

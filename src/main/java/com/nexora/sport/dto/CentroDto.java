@@ -18,5 +18,11 @@ public record CentroDto(
         BigDecimal montoMaximoDescuentoApartado,
         BigDecimal porcentajeMaximoDescuentoApartado,
         boolean permitirAccesoConAdeudo,
-        int diasInactividadRiesgo
+        int diasInactividadRiesgo,
+        boolean notificacionesMembresiaActivo,
+        boolean notificacionesClaseActivo,
+        boolean notificacionesEmailActivo,
+        boolean notificacionesInternoActivo,
+        String notificacionesDiasAntesVencimiento,
+        Integer notificacionesHorasAntesClase
 ) {}

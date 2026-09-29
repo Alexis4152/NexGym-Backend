@@ -29,25 +29,34 @@ public class RolController {
         this.tenantScope = tenantScope;
     }
 
+    /** Ver la lista de roles (solo lectura) tambien la necesita quien gestiona Usuarios,
+     * para poblar el selector de rol al crear/editar -- no solo quien administra Roles
+     * en si. Por eso este metodo reemplaza el @PreAuthorize de clase para aceptar
+     * cualquiera de las dos secciones (crear/editar/eliminar siguen exclusivos de ROLES). */
     @GetMapping
+    @PreAuthorize("@sectionAccess.check('ROLES') or @sectionAccess.check('USUARIOS')")
     public ApiResponse<List<RolDto>> listar(@AuthenticationPrincipal Usuario actor) {
         return ApiResponse.ok(rolService.listar(tenantScope.scopeId(actor)));
     }
 
     @PostMapping
+    @PreAuthorize("@sectionAccess.check('ROLES') and @permisoAccess.check('ROLES_ADMINISTRAR')")
     public ApiResponse<RolDto> crear(@AuthenticationPrincipal Usuario actor, @Valid @RequestBody RolRequest request) {
         Long centroId = tenantScope.scopeId(actor);
         return ApiResponse.ok("Rol creado", rolService.crear(centroId, centroRepository.getReferenceById(centroId), request));
     }
 
     @PutMapping("/{id}")
-    public ApiResponse<RolDto> actualizar(@PathVariable Long id, @Valid @RequestBody RolRequest request) {
-        return ApiResponse.ok("Rol actualizado", rolService.actualizar(id, request));
+    @PreAuthorize("@sectionAccess.check('ROLES') and @permisoAccess.check('ROLES_ADMINISTRAR')")
+    public ApiResponse<RolDto> actualizar(@AuthenticationPrincipal Usuario actor, @PathVariable Long id,
+                                          @Valid @RequestBody RolRequest request) {
+        return ApiResponse.ok("Rol actualizado", rolService.actualizar(tenantScope.scopeId(actor), id, request));
     }
 
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> eliminar(@PathVariable Long id) {
-        rolService.eliminar(id);
+    @PreAuthorize("@sectionAccess.check('ROLES') and @permisoAccess.check('ROLES_ADMINISTRAR')")
+    public ApiResponse<Void> eliminar(@AuthenticationPrincipal Usuario actor, @PathVariable Long id) {
+        rolService.eliminar(tenantScope.scopeId(actor), id);
         return ApiResponse.ok("Rol eliminado", null);
     }
 }

@@ -92,27 +92,33 @@ public class ReporteController {
         return ApiResponse.ok(tiendaService.ventasPorCategoria(actor, from, to));
     }
 
-    // ---- Finanzas ----
+    // ---- Finanzas ---- (unico grupo que exige el permiso REPORTES_FINANCIEROS ademas de
+    // la seccion REPORTES: seccion 11 del encargo, "Recepcion NO ve reportes financieros
+    // globales" aunque tenga acceso al modulo de Reportes en general)
 
     @GetMapping("/finanzas/resumen")
+    @PreAuthorize("@sectionAccess.check('REPORTES') and @permisoAccess.check('REPORTES_FINANCIEROS')")
     public ApiResponse<FinancieroResumenDto> finanzasResumen(@AuthenticationPrincipal Usuario actor, @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                                                                @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return ApiResponse.ok(financieroService.resumen(actor, from, to));
     }
 
     @GetMapping("/finanzas/resumen-comparativo")
+    @PreAuthorize("@sectionAccess.check('REPORTES') and @permisoAccess.check('REPORTES_FINANCIEROS')")
     public ApiResponse<ComparativoDto> finanzasResumenComparativo(@AuthenticationPrincipal Usuario actor, @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                                                                     @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return ApiResponse.ok(financieroService.resumenComparativo(actor, from, to));
     }
 
     @GetMapping("/finanzas/metodos-pago")
+    @PreAuthorize("@sectionAccess.check('REPORTES') and @permisoAccess.check('REPORTES_FINANCIEROS')")
     public ApiResponse<Map<String, List<EtiquetaValorDto>>> finanzasMetodosPago(@AuthenticationPrincipal Usuario actor, @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                                                                                   @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return ApiResponse.ok(financieroService.metodosDePago(actor, from, to));
     }
 
     @GetMapping("/finanzas/cartera")
+    @PreAuthorize("@sectionAccess.check('REPORTES') and @permisoAccess.check('REPORTES_FINANCIEROS')")
     public ApiResponse<CarteraResumenDto> cartera(@AuthenticationPrincipal Usuario actor) {
         return ApiResponse.ok(financieroService.cartera(actor));
     }

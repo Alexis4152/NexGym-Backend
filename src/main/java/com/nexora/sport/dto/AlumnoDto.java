@@ -5,6 +5,8 @@ import java.util.Set;
 
 public record AlumnoDto(
         Long id,
+        Long sucursalId,
+        String sucursalNombre,
         String nombre,
         LocalDate fechaNacimiento,
         String telefono,

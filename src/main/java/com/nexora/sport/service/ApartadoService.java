@@ -113,12 +113,13 @@ public class ApartadoService {
 
     // ---------------------------------------------------------------- admin
     @Transactional(readOnly = true)
-    public PageResponse<ApartadoDto> listar(Usuario actor, EstadoApartado estado, Pageable pageable) {
+    public PageResponse<ApartadoDto> listar(Usuario actor, EstadoApartado estado, java.time.LocalDate desde,
+                                             java.time.LocalDate hasta, String q, Pageable pageable) {
         Long centroId = tenantScope.scopeId(actor);
-        var page = estado != null
-                ? apartadoRepository.findByCentroIdAndEstadoOrderBySolicitadoEnDesc(centroId, estado, pageable)
-                : apartadoRepository.findByCentroIdOrderBySolicitadoEnDesc(centroId, pageable);
-        return PageResponse.of(page, a -> toDto(a, false));
+        LocalDateTime desdeFecha = desde != null ? desde.atStartOfDay() : null;
+        LocalDateTime hastaFecha = hasta != null ? hasta.plusDays(1).atStartOfDay() : null;
+        String texto = (q == null || q.isBlank()) ? null : q;
+        return PageResponse.of(apartadoRepository.buscar(centroId, estado, desdeFecha, hastaFecha, texto, pageable), a -> toDto(a, false));
     }
 
     public Apartado buscar(Long id) {

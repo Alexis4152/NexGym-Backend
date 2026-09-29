@@ -44,14 +44,19 @@ public class InstructorController {
     }
 
     @PutMapping("/{id}")
-    public ApiResponse<InstructorDto> actualizar(@PathVariable Long id, @Valid @RequestBody InstructorRequest request) {
-        return ApiResponse.ok("Instructor actualizado", instructorService.actualizar(id, request));
+    public ApiResponse<InstructorDto> actualizar(@AuthenticationPrincipal Usuario actor, @PathVariable Long id, @Valid @RequestBody InstructorRequest request) {
+        return ApiResponse.ok("Instructor actualizado", instructorService.actualizar(actor, id, request));
     }
 
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> desactivar(@PathVariable Long id) {
-        instructorService.desactivar(id);
+    public ApiResponse<Void> desactivar(@AuthenticationPrincipal Usuario actor, @PathVariable Long id) {
+        instructorService.desactivar(actor, id);
         return ApiResponse.ok("Instructor desactivado", null);
+    }
+
+    @PostMapping("/{id}/foto")
+    public ApiResponse<InstructorDto> subirFoto(@AuthenticationPrincipal Usuario actor, @PathVariable Long id, @RequestParam("file") MultipartFile file) {
+        return ApiResponse.ok("Foto actualizada", instructorService.subirFoto(actor, id, file));
     }
 
     @GetMapping("/{id}/documentos")

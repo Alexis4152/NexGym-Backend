@@ -48,12 +48,14 @@ public class CajaController {
     }
 
     @PostMapping("/ingresos")
+    @PreAuthorize("@sectionAccess.check('CAJA') and @permisoAccess.check('CAJA_MOVIMIENTO')")
     public ApiResponse<MovimientoFinancieroDto> registrarIngreso(@AuthenticationPrincipal Usuario actor,
                                                                    @Valid @RequestBody MovimientoFinancieroRequest request) {
         return ApiResponse.ok("Ingreso registrado", cajaService.registrarMovimiento(actor, TipoMovimiento.INGRESO, request));
     }
 
     @PostMapping("/egresos")
+    @PreAuthorize("@sectionAccess.check('CAJA') and @permisoAccess.check('CAJA_MOVIMIENTO')")
     public ApiResponse<MovimientoFinancieroDto> registrarEgreso(@AuthenticationPrincipal Usuario actor,
                                                                   @Valid @RequestBody MovimientoFinancieroRequest request) {
         return ApiResponse.ok("Egreso registrado", cajaService.registrarMovimiento(actor, TipoMovimiento.EGRESO, request));

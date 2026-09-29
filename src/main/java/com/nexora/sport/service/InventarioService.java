@@ -5,6 +5,7 @@ import com.nexora.sport.exception.FieldConflictException;
 import com.nexora.sport.exception.ResourceNotFoundException;
 import com.nexora.sport.model.*;
 import com.nexora.sport.repository.*;
+import com.nexora.sport.security.PermisoEvaluator;
 import com.nexora.sport.security.TenantScope;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -58,12 +59,10 @@ public class InventarioService {
 
     // ---- Articulos ----
     @Transactional(readOnly = true)
-    public PageResponse<ArticuloInventarioDto> listar(Usuario actor, String q, Pageable pageable) {
+    public PageResponse<ArticuloInventarioDto> listar(Usuario actor, String q, Long categoriaId, boolean soloStockBajo, Pageable pageable) {
         Long centroId = tenantScope.scopeId(actor);
-        var page = (q == null || q.isBlank())
-                ? articuloRepository.findByCentroIdAndDeletedAtIsNull(centroId, pageable)
-                : articuloRepository.findByCentroIdAndDeletedAtIsNullAndNombreContainingIgnoreCase(centroId, q, pageable);
-        return PageResponse.of(page, this::toDto);
+        String texto = (q == null || q.isBlank()) ? null : q;
+        return PageResponse.of(articuloRepository.buscar(centroId, texto, categoriaId, soloStockBajo, pageable), this::toDto);
     }
 
     @Transactional(readOnly = true)
@@ -117,8 +116,8 @@ public class InventarioService {
 
     @Transactional
     public ArticuloInventarioDto ajustarStock(Long id, Usuario actor, AjusteStockRequest request) {
-        if (request.delta() < 0 && !tenantScope.isAdminOSuperior(actor)) {
-            throw new IllegalStateException("Solo Dueno o Administrador puede quitar piezas del inventario");
+        if (request.delta() < 0 && !PermisoEvaluator.tiene(actor, Permiso.INVENTARIO_AJUSTE_NEGATIVO)) {
+            throw new IllegalStateException("No tienes permiso para quitar piezas del inventario");
         }
         ArticuloInventario a = buscar(id);
         int anterior = a.getStock();

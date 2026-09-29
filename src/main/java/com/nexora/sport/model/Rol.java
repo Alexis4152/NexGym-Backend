@@ -39,4 +39,16 @@ public class Rol {
     @Enumerated(EnumType.STRING)
     @Column(name = "seccion")
     private Set<Seccion> secciones = new HashSet<>();
+
+    /** Jerarquia explicita (ver NivelJerarquia): decide quien puede administrar a quien, independiente del nombre del rol. */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private NivelJerarquia nivel = NivelJerarquia.OPERATIVO;
+
+    /** Permisos granulares (accion) de este rol, encima de secciones (modulo). */
+    @ElementCollection(targetClass = Permiso.class, fetch = FetchType.EAGER)
+    @CollectionTable(name = "role_permisos", joinColumns = @JoinColumn(name = "role_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "permiso")
+    private Set<Permiso> permisos = new HashSet<>();
 }

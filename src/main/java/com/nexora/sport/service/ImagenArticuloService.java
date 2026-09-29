@@ -5,38 +5,26 @@ import com.nexora.sport.exception.ResourceNotFoundException;
 import com.nexora.sport.model.ArticuloInventario;
 import com.nexora.sport.model.ImagenArticulo;
 import com.nexora.sport.repository.ImagenArticuloRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 
 /** Galeria de fotos de un articulo de inventario (una portada, varias secundarias). */
 @Service
 public class ImagenArticuloService {
 
-    private static final Logger log = LoggerFactory.getLogger(ImagenArticuloService.class);
     private static final Set<String> TIPOS_PERMITIDOS = Set.of("image/png", "image/jpeg", "image/webp");
     private static final long TAMANIO_MAXIMO = 5L * 1024 * 1024; // 5MB
 
     private final ImagenArticuloRepository imagenRepository;
+    private final FileStorageService fileStorageService;
 
-    @Value("${app.uploads.dir:uploads}")
-    private String uploadsDir;
-
-    public ImagenArticuloService(ImagenArticuloRepository imagenRepository) {
+    public ImagenArticuloService(ImagenArticuloRepository imagenRepository, FileStorageService fileStorageService) {
         this.imagenRepository = imagenRepository;
+        this.fileStorageService = fileStorageService;
     }
 
     @Transactional(readOnly = true)
@@ -52,35 +40,15 @@ public class ImagenArticuloService {
 
     @Transactional
     public ImagenArticuloDto subir(ArticuloInventario articulo, MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("Selecciona una imagen");
-        }
-        if (file.getSize() > TAMANIO_MAXIMO) {
-            throw new IllegalArgumentException("La imagen no puede pesar mas de 5MB");
-        }
-        String contentType = file.getContentType();
-        if (contentType == null || !TIPOS_PERMITIDOS.contains(contentType)) {
-            throw new IllegalArgumentException("Formato de imagen no soportado (usa jpg, png o webp)");
-        }
+        String ruta = fileStorageService.guardar("articulos", articulo.getId(), file, TIPOS_PERMITIDOS, TAMANIO_MAXIMO);
 
-        try {
-            Path carpeta = Paths.get(uploadsDir, "articulos", String.valueOf(articulo.getId())).toAbsolutePath().normalize();
-            Files.createDirectories(carpeta);
-            String extension = extensionPara(contentType);
-            String nombreArchivo = UUID.randomUUID() + extension;
-            Path destino = carpeta.resolve(nombreArchivo);
-            Files.copy(file.getInputStream(), destino, StandardCopyOption.REPLACE_EXISTING);
-
-            ImagenArticulo imagen = new ImagenArticulo();
-            imagen.setArticulo(articulo);
-            imagen.setRuta("/uploads/articulos/" + articulo.getId() + "/" + nombreArchivo);
-            long existentes = imagenRepository.countByArticuloId(articulo.getId());
-            imagen.setEsPrincipal(existentes == 0);
-            imagen.setOrden((int) existentes);
-            return toDto(imagenRepository.save(imagen));
-        } catch (IOException e) {
-            throw new UncheckedIOException("No se pudo guardar la imagen", e);
-        }
+        ImagenArticulo imagen = new ImagenArticulo();
+        imagen.setArticulo(articulo);
+        imagen.setRuta(ruta);
+        long existentes = imagenRepository.countByArticuloId(articulo.getId());
+        imagen.setEsPrincipal(existentes == 0);
+        imagen.setOrden((int) existentes);
+        return toDto(imagenRepository.save(imagen));
     }
 
     @Transactional
@@ -105,7 +73,7 @@ public class ImagenArticuloService {
         }
         boolean eraPrincipal = imagen.isEsPrincipal();
         imagenRepository.delete(imagen);
-        eliminarArchivo(imagen.getRuta());
+        fileStorageService.eliminar(imagen.getRuta());
 
         if (eraPrincipal) {
             imagenRepository.findFirstByArticuloIdOrderByOrdenAsc(articuloId).ifPresent(siguiente -> {
@@ -113,24 +81,6 @@ public class ImagenArticuloService {
                 imagenRepository.save(siguiente);
             });
         }
-    }
-
-    private void eliminarArchivo(String ruta) {
-        try {
-            String relativo = ruta.replaceFirst("^/uploads/", "");
-            Path archivo = Paths.get(uploadsDir, relativo).toAbsolutePath().normalize();
-            Files.deleteIfExists(archivo);
-        } catch (IOException e) {
-            log.warn("No se pudo borrar el archivo de imagen {}: {}", ruta, e.getMessage());
-        }
-    }
-
-    private String extensionPara(String contentType) {
-        return switch (contentType) {
-            case "image/png" -> ".png";
-            case "image/webp" -> ".webp";
-            default -> ".jpg";
-        };
     }
 
     public ImagenArticuloDto toDto(ImagenArticulo i) {

@@ -39,11 +39,12 @@ public class MembresiaService {
     private final PagoMembresiaRepository pagoMembresiaRepository;
     private final PagoMembresiaService pagoMembresiaService;
     private final TenantScope tenantScope;
+    private final NotificacionService notificacionService;
 
     public MembresiaService(MembresiaRepository membresiaRepository, MembresiaPlanRepository planRepository,
                              AlumnoRepository alumnoRepository, CentroRepository centroRepository,
                              PagoMembresiaRepository pagoMembresiaRepository, PagoMembresiaService pagoMembresiaService,
-                             TenantScope tenantScope) {
+                             TenantScope tenantScope, NotificacionService notificacionService) {
         this.membresiaRepository = membresiaRepository;
         this.planRepository = planRepository;
         this.alumnoRepository = alumnoRepository;
@@ -51,6 +52,7 @@ public class MembresiaService {
         this.pagoMembresiaRepository = pagoMembresiaRepository;
         this.pagoMembresiaService = pagoMembresiaService;
         this.tenantScope = tenantScope;
+        this.notificacionService = notificacionService;
     }
 
     @Transactional(readOnly = true)
@@ -92,6 +94,7 @@ public class MembresiaService {
         m = membresiaRepository.save(m);
 
         registrarPagoInicialSiAplica(actor, centroId, m, request.montoPagoInicial(), request.metodoPago());
+        notificacionService.notificarMembresiaNueva(m);
         return toDto(m);
     }
 
@@ -122,13 +125,14 @@ public class MembresiaService {
         m = membresiaRepository.save(m);
 
         registrarPagoInicialSiAplica(actor, centroId, m, request.montoPagoInicial(), request.metodoPago());
+        notificacionService.notificarMembresiaRenovada(m);
         return toDto(m);
     }
 
     @Transactional
     public MembresiaDto suspender(Usuario actor, Long id, String motivo) {
-        if (!tenantScope.isAdminOSuperior(actor)) {
-            throw new IllegalStateException("Solo Dueno o Administrador puede suspender una membresia");
+        if (!com.nexora.sport.security.PermisoEvaluator.tiene(actor, com.nexora.sport.model.Permiso.MEMBRESIAS_SUSPENDER)) {
+            throw new IllegalStateException("No tienes permiso para suspender membresias");
         }
         Membresia m = buscarDelCentro(id, tenantScope.scopeId(actor));
         if (m.getEstado() == EstadoMembresia.CANCELADA || m.getEstado() == EstadoMembresia.VENCIDA) {
@@ -163,8 +167,8 @@ public class MembresiaService {
 
     @Transactional
     public MembresiaDto cancelar(Usuario actor, Long id, String motivo) {
-        if (!tenantScope.isAdminOSuperior(actor)) {
-            throw new IllegalStateException("Solo Dueno o Administrador puede cancelar una membresia");
+        if (!com.nexora.sport.security.PermisoEvaluator.tiene(actor, com.nexora.sport.model.Permiso.MEMBRESIAS_CANCELAR)) {
+            throw new IllegalStateException("No tienes permiso para cancelar membresias");
         }
         Membresia m = buscarDelCentro(id, tenantScope.scopeId(actor));
         if (m.getEstado() == EstadoMembresia.CANCELADA) {

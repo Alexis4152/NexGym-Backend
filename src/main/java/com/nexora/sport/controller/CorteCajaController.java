@@ -5,9 +5,13 @@ import com.nexora.sport.model.Usuario;
 import com.nexora.sport.service.CorteCajaService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/cortes-caja")
@@ -27,9 +31,18 @@ public class CorteCajaController {
 
     @GetMapping
     public ApiResponse<PageResponse<CorteCajaDto>> listar(@AuthenticationPrincipal Usuario actor,
+                                                            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+                                                            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
+                                                            @RequestParam(required = false) String estado,
+                                                            @RequestParam(required = false) Long usuarioId,
                                                             @RequestParam(defaultValue = "0") int page,
                                                             @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.ok(corteCajaService.listar(actor, PageRequest.of(page, size)));
+        return ApiResponse.ok(corteCajaService.listar(actor, desde, hasta, estado, usuarioId, PageRequest.of(page, size)));
+    }
+
+    @GetMapping("/cajeros")
+    public ApiResponse<List<CajeroDto>> cajeros(@AuthenticationPrincipal Usuario actor) {
+        return ApiResponse.ok(corteCajaService.cajeros(actor));
     }
 
     @GetMapping("/{id}")
@@ -43,11 +56,13 @@ public class CorteCajaController {
     }
 
     @PostMapping("/abrir")
+    @PreAuthorize("@sectionAccess.check('TIENDA') and @permisoAccess.check('CAJA_ABRIR')")
     public ApiResponse<CorteCajaDto> abrir(@AuthenticationPrincipal Usuario actor, @Valid @RequestBody AbrirCorteRequest request) {
         return ApiResponse.ok("Corte abierto", corteCajaService.abrir(actor, request));
     }
 
     @PostMapping("/{id}/cerrar")
+    @PreAuthorize("@sectionAccess.check('TIENDA') and @permisoAccess.check('CAJA_CERRAR')")
     public ApiResponse<CorteCajaDto> cerrar(@PathVariable Long id, @AuthenticationPrincipal Usuario actor,
                                              @Valid @RequestBody CerrarCorteRequest request) {
         return ApiResponse.ok("Corte cerrado", corteCajaService.cerrar(id, actor, request));

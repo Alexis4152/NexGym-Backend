@@ -18,5 +18,11 @@ public record CentroRequest(
         BigDecimal montoMaximoDescuentoApartado,
         BigDecimal porcentajeMaximoDescuentoApartado,
         Boolean permitirAccesoConAdeudo,
-        Integer diasInactividadRiesgo
+        Integer diasInactividadRiesgo,
+        Boolean notificacionesMembresiaActivo,
+        Boolean notificacionesClaseActivo,
+        Boolean notificacionesEmailActivo,
+        Boolean notificacionesInternoActivo,
+        String notificacionesDiasAntesVencimiento,
+        Integer notificacionesHorasAntesClase
 ) {}

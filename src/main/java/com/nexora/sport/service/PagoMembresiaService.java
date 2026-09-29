@@ -28,13 +28,15 @@ public class PagoMembresiaService {
     private final MembresiaRepository membresiaRepository;
     private final CajaService cajaService;
     private final TenantScope tenantScope;
+    private final NotificacionService notificacionService;
 
     public PagoMembresiaService(PagoMembresiaRepository pagoMembresiaRepository, MembresiaRepository membresiaRepository,
-                                 CajaService cajaService, TenantScope tenantScope) {
+                                 CajaService cajaService, TenantScope tenantScope, NotificacionService notificacionService) {
         this.pagoMembresiaRepository = pagoMembresiaRepository;
         this.membresiaRepository = membresiaRepository;
         this.cajaService = cajaService;
         this.tenantScope = tenantScope;
+        this.notificacionService = notificacionService;
     }
 
     @Transactional(readOnly = true)
@@ -73,12 +75,12 @@ public class PagoMembresiaService {
         if (monto.compareTo(saldo) > 0) {
             throw new IllegalArgumentException("El monto ($" + monto + ") no puede exceder el saldo pendiente ($" + saldo + ")");
         }
+        boolean esPrimerPago = pagoMembresiaRepository.countByMembresiaIdAndEstado(m.getId(), EstadoPago.VALIDO) == 0;
         if (monto.compareTo(saldo) < 0) {
             MembresiaPlan plan = m.getPlan();
             if (!plan.isPermiteAbonos()) {
                 throw new IllegalArgumentException("Este plan no permite abonos; el pago debe cubrir el total del saldo ($" + saldo + ")");
             }
-            boolean esPrimerPago = pagoMembresiaRepository.countByMembresiaIdAndEstado(m.getId(), EstadoPago.VALIDO) == 0;
             if (esPrimerPago && plan.getMontoMinimoAbono() != null && monto.compareTo(plan.getMontoMinimoAbono()) < 0) {
                 throw new IllegalArgumentException("El pago inicial minimo para este plan es $" + plan.getMontoMinimoAbono());
             }
@@ -93,13 +95,18 @@ public class PagoMembresiaService {
         pago.setMetodoPago(metodo);
         pago.setMovimientoFinanciero(movimiento);
         pago.setRegistradoPor(actor);
-        return pagoMembresiaRepository.save(pago);
+        pago = pagoMembresiaRepository.save(pago);
+
+        // La notificacion solo se dispara aqui, DESPUES de que el pago y su movimiento en
+        // Caja ya se confirmaron (seccion 10 del encargo). Nunca antes.
+        notificacionService.notificarPago(m, pago, esPrimerPago, calcularSaldo(m));
+        return pago;
     }
 
     @Transactional
     public PagoMembresiaDto cancelarPago(Usuario actor, Long membresiaId, Long pagoId, String motivo) {
-        if (!tenantScope.isAdminOSuperior(actor)) {
-            throw new IllegalStateException("Solo Dueno o Administrador puede cancelar un pago");
+        if (!com.nexora.sport.security.PermisoEvaluator.tiene(actor, com.nexora.sport.model.Permiso.PAGOS_CANCELAR)) {
+            throw new IllegalStateException("No tienes permiso para cancelar pagos");
         }
         Long centroId = tenantScope.scopeId(actor);
         Membresia m = buscarDelCentro(membresiaId, centroId);

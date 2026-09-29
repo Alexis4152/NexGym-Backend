@@ -6,9 +6,12 @@ import com.nexora.sport.model.Usuario;
 import com.nexora.sport.service.ApartadoService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/apartados")
@@ -24,10 +27,13 @@ public class ApartadoController {
     @GetMapping
     public ApiResponse<PageResponse<ApartadoDto>> listar(@AuthenticationPrincipal Usuario actor,
                                                            @RequestParam(required = false) String estado,
+                                                           @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+                                                           @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
+                                                           @RequestParam(required = false) String q,
                                                            @RequestParam(defaultValue = "0") int page,
                                                            @RequestParam(defaultValue = "20") int size) {
-        EstadoApartado filtro = estado != null ? EstadoApartado.valueOf(estado) : null;
-        return ApiResponse.ok(apartadoService.listar(actor, filtro, PageRequest.of(page, size)));
+        EstadoApartado filtro = (estado != null && !estado.isBlank()) ? EstadoApartado.valueOf(estado) : null;
+        return ApiResponse.ok(apartadoService.listar(actor, filtro, desde, hasta, q, PageRequest.of(page, size)));
     }
 
     @GetMapping("/{id}")

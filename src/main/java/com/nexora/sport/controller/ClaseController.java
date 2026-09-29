@@ -1,6 +1,7 @@
 package com.nexora.sport.controller;
 
 import com.nexora.sport.dto.ApiResponse;
+import com.nexora.sport.dto.ClaseDisponibleDto;
 import com.nexora.sport.dto.ClaseDto;
 import com.nexora.sport.dto.ClaseRequest;
 import com.nexora.sport.dto.PageResponse;
@@ -35,6 +36,13 @@ public class ClaseController {
     @GetMapping("/activas")
     public ApiResponse<List<ClaseDto>> listarActivas(@AuthenticationPrincipal Usuario actor) {
         return ApiResponse.ok(claseService.listarActivas(actor));
+    }
+
+    /** Cupo disponible por clase en TODAS las sucursales del centro (no solo la del
+     * actor) -- para mostrador: "en esta sucursal esta lleno, ¿donde mas hay lugar?". */
+    @GetMapping("/disponibilidad")
+    public ApiResponse<List<ClaseDisponibleDto>> disponibilidad(@AuthenticationPrincipal Usuario actor) {
+        return ApiResponse.ok(claseService.disponibilidad(actor));
     }
 
     @PostMapping

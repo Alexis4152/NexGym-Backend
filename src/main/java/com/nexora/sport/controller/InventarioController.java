@@ -40,9 +40,11 @@ public class InventarioController {
     @GetMapping("/articulos")
     public ApiResponse<PageResponse<ArticuloInventarioDto>> listar(@AuthenticationPrincipal Usuario actor,
                                                                      @RequestParam(required = false) String q,
+                                                                     @RequestParam(required = false) Long categoriaId,
+                                                                     @RequestParam(defaultValue = "false") boolean soloStockBajo,
                                                                      @RequestParam(defaultValue = "0") int page,
                                                                      @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.ok(inventarioService.listar(actor, q, PageRequest.of(page, size)));
+        return ApiResponse.ok(inventarioService.listar(actor, q, categoriaId, soloStockBajo, PageRequest.of(page, size)));
     }
 
     @GetMapping("/articulos/stock-bajo")

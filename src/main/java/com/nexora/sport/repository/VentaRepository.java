@@ -1,5 +1,7 @@
 package com.nexora.sport.repository;
 
+import com.nexora.sport.model.EstadoVenta;
+import com.nexora.sport.model.MetodoPago;
 import com.nexora.sport.model.Venta;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,6 +16,23 @@ import java.util.List;
 public interface VentaRepository extends JpaRepository<Venta, Long> {
     List<Venta> findByCorteCajaId(Long corteCajaId);
     Page<Venta> findByCentroIdOrderByCreatedAtDesc(Long centroId, Pageable pageable);
+
+    /** Filtros homologados con DemoPV#Sales (Desde/Hasta/Cliente/Metodo/Estado, todos opcionales). */
+    @Query("select v from Venta v where v.centro.id = :centroId " +
+           // cast(:x as tipo) en el "is null": sin el cast, esa ocurrencia del parametro
+           // (la que va suelta en el "is null", sin comparar contra ninguna columna) no
+           // tiene forma de que Postgres infiera su tipo y truena "no se pudo determinar
+           // el tipo del parametro $n" (mismo bug de fondo que el de lower(bytea), pero
+           // aqui aplica a cualquier tipo no-string: fechas, enums, Long -- ver reporte).
+           "and (cast(:desde as timestamp) is null or v.createdAt >= :desde) " +
+           "and (cast(:hasta as timestamp) is null or v.createdAt < :hasta) " +
+           "and (cast(:cliente as string) is null or lower(v.clienteNombre) like lower(concat('%', cast(:cliente as string), '%'))) " +
+           "and (cast(:metodoPago as string) is null or v.metodoPago = :metodoPago) " +
+           "and (cast(:estado as string) is null or v.estado = :estado) " +
+           "order by v.createdAt desc")
+    Page<Venta> buscar(@Param("centroId") Long centroId, @Param("desde") LocalDateTime desde, @Param("hasta") LocalDateTime hasta,
+                        @Param("cliente") String cliente, @Param("metodoPago") MetodoPago metodoPago,
+                        @Param("estado") EstadoVenta estado, Pageable pageable);
 
     /** Solo ventas COMPLETADA: una cancelada no debe sumar en ningun reporte. */
     @Query("select coalesce(sum(v.total), 0) from Venta v where v.centro.id = :centroId " +

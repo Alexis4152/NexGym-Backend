@@ -15,5 +15,7 @@ public record AlumnoRequest(
         String contactoEmergenciaTelefono,
         @Size(max = 1000) String observaciones,
         String estado,
-        Set<Long> disciplinaIds
+        Set<Long> disciplinaIds,
+        /** Sucursal donde se inscribe. Null = sin asignar (visible centro-wide). Obligatorio si quien lo crea esta acotado a una sucursal. */
+        Long sucursalId
 ) {}

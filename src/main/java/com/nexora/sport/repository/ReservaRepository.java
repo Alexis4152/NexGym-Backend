@@ -31,4 +31,10 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
                                         @Param("estadoExcluido") EstadoReserva estadoExcluido);
 
     long countByClaseIdAndFechaBetweenAndEstadoNot(Long claseId, LocalDate desde, LocalDate hasta, EstadoReserva estadoExcluido);
+
+    /** Reservas activas de una clase desde hoy en adelante (para cascada de cancelacion/cambio, ver ClaseService). */
+    List<Reserva> findByClaseIdAndEstadoAndFechaGreaterThanEqual(Long claseId, EstadoReserva estado, LocalDate desde);
+
+    /** Candidatas a recordatorio de clase (ver NotificacionSchedulerService): reservas activas en una ventana corta de fechas. */
+    List<Reserva> findByCentroIdAndEstadoAndFechaBetween(Long centroId, EstadoReserva estado, LocalDate desde, LocalDate hasta);
 }

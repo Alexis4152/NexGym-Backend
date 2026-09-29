@@ -78,6 +78,13 @@ public class Venta {
     @Column(name = "cancelada_en")
     private LocalDateTime canceladaEn;
 
+    /** El MovimientoFinanciero hermano creado por CajaService#registrarIngresoDeVenta.
+     * Sin esta FK, cancelar la venta no podia encontrarlo para anularlo (soft-void) y el
+     * dashboard/reportes seguian contando el ingreso de una venta ya cancelada. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "movimiento_financiero_id")
+    private MovimientoFinanciero movimientoFinanciero;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 

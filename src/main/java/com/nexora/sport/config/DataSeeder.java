@@ -1,5 +1,7 @@
 package com.nexora.sport.config;
 
+import com.nexora.sport.model.NivelJerarquia;
+import com.nexora.sport.model.Permiso;
 import com.nexora.sport.model.Rol;
 import com.nexora.sport.model.Seccion;
 import com.nexora.sport.model.Usuario;
@@ -43,7 +45,9 @@ public class DataSeeder implements CommandLineRunner {
             r.setCentro(null);
             r.setNombre("SUPER_ADMIN");
             r.setEsSistema(true);
+            r.setNivel(NivelJerarquia.SUPER_ADMIN);
             r.setSecciones(EnumSet.allOf(Seccion.class));
+            r.setPermisos(EnumSet.allOf(Permiso.class));
             return rolRepository.save(r);
         });
 

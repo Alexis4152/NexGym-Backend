@@ -20,5 +20,6 @@ public enum Seccion {
     REPORTES,
     USUARIOS,
     ROLES,
-    CENTROS
+    CENTROS,
+    NOTIFICACIONES
 }

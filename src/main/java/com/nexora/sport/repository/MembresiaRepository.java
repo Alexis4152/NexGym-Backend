@@ -77,6 +77,15 @@ public interface MembresiaRepository extends JpaRepository<Membresia, Long> {
     @Query("select m from Membresia m where m.centro.id = :centroId and m.estado = com.nexora.sport.model.EstadoMembresia.ACTIVA and m.fechaFin is not null")
     List<Membresia> findActivasConFechaFin(@Param("centroId") Long centroId);
 
+    /** Para el aviso "membresia vencida" (una sola vez, el dia despues de vencer): ver NotificacionSchedulerService. */
+    @Query("select m from Membresia m where m.centro.id = :centroId and m.estado = com.nexora.sport.model.EstadoMembresia.VENCIDA and m.fechaFin = :fecha")
+    List<Membresia> findVencidasEnFecha(@Param("centroId") Long centroId, @Param("fecha") LocalDate fecha);
+
+    /** Para el resumen administrativo "N membresias vencen esta semana". */
+    @Query("select count(m) from Membresia m where m.centro.id = :centroId and m.estado = com.nexora.sport.model.EstadoMembresia.ACTIVA " +
+           "and m.fechaFin between :desde and :hasta")
+    long countActivasFechaFinEntre(@Param("centroId") Long centroId, @Param("desde") LocalDate desde, @Param("hasta") LocalDate hasta);
+
     /** Para "Disciplinas": membresias ACTIVA que incluyen una disciplina dada (via membresia_disciplinas), o accesoCompleto. */
     @Query("select m from Membresia m where m.centro.id = :centroId and m.estado = com.nexora.sport.model.EstadoMembresia.ACTIVA " +
            "and (m.plan.accesoCompleto = true or :disciplinaId in (select d.id from m.disciplinas d))")

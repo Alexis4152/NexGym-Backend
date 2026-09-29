@@ -23,6 +23,11 @@ public class Alumno {
     @JoinColumn(name = "centro_id", nullable = false)
     private Centro centro;
 
+    /** Sucursal donde esta inscrito (alcance de un Admin restringido a una sucursal). Null = visible centro-wide. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sucursal_id")
+    private Sucursal sucursal;
+
     @Column(nullable = false, length = 150)
     private String nombre;
 

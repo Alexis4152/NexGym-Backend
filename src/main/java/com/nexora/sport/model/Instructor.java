@@ -21,6 +21,12 @@ public class Instructor {
     @JoinColumn(name = "centro_id", nullable = false)
     private Centro centro;
 
+    /** Cuenta de login ligada a esta ficha (nullable: la mayoria de instructores son solo un registro de
+     * roster, sin acceso al sistema). Cuando existe, permite acotar "mis clases/reservas" al iniciar sesion. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "usuario_id")
+    private Usuario usuario;
+
     @Column(nullable = false, length = 150)
     private String nombre;
 
@@ -46,4 +52,14 @@ public class Instructor {
             inverseJoinColumns = @JoinColumn(name = "disciplina_id")
     )
     private Set<Disciplina> disciplinas = new HashSet<>();
+
+    /** Sucursales donde este instructor esta disponible para impartir clases. Vacio =
+     * disponible en todas (comportamiento por defecto, no pierde nada quien ya existia). */
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "instructor_sucursales",
+            joinColumns = @JoinColumn(name = "instructor_id"),
+            inverseJoinColumns = @JoinColumn(name = "sucursal_id")
+    )
+    private Set<Sucursal> sucursales = new HashSet<>();
 }

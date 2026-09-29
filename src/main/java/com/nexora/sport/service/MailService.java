@@ -41,6 +41,28 @@ public class MailService {
         }
     }
 
+    /**
+     * Version sincrona de {@link #send}: NO atrapa el error, lo propaga. Pensada para
+     * quien necesita saber si el envio realmente funciono (ver NotificacionEmailDispatcher,
+     * que la llama desde su propio metodo @Async para poder registrar el estado de envio
+     * sin bloquear la transaccion que disparo la notificacion). mailSender.send() lanza
+     * MailException (unchecked) si falla; se deja propagar a proposito, el caller decide.
+     */
+    public void sendSync(String to, String subject, String body) {
+        if (to == null || to.isBlank()) {
+            throw new IllegalArgumentException("Destinatario vacio");
+        }
+        if (fromAddress == null || fromAddress.isBlank()) {
+            throw new IllegalStateException("No hay una cuenta de correo configurada (spring.mail.username)");
+        }
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom(fromAddress);
+        message.setTo(to);
+        message.setSubject(subject);
+        message.setText(body);
+        mailSender.send(message);
+    }
+
     @Async
     public void enviarConAdjunto(String to, String subject, String body, String nombreArchivo, byte[] adjunto) {
         if (to == null || to.isBlank() || fromAddress == null || fromAddress.isBlank()) return;

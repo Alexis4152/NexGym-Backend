@@ -11,6 +11,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/alumnos")
@@ -32,23 +33,32 @@ public class AlumnoController {
     }
 
     @GetMapping("/{id}")
-    public ApiResponse<AlumnoDto> obtener(@PathVariable Long id) {
-        return ApiResponse.ok(alumnoService.obtener(id));
+    public ApiResponse<AlumnoDto> obtener(@AuthenticationPrincipal Usuario actor, @PathVariable Long id) {
+        return ApiResponse.ok(alumnoService.obtener(actor, id));
     }
 
     @PostMapping
+    @PreAuthorize("@sectionAccess.check('ALUMNOS') and @permisoAccess.check('ALUMNOS_CREAR')")
     public ApiResponse<AlumnoDto> crear(@AuthenticationPrincipal Usuario actor, @Valid @RequestBody AlumnoRequest request) {
         return ApiResponse.ok("Alumno registrado", alumnoService.crear(actor, request));
     }
 
     @PutMapping("/{id}")
-    public ApiResponse<AlumnoDto> actualizar(@PathVariable Long id, @Valid @RequestBody AlumnoRequest request) {
-        return ApiResponse.ok("Alumno actualizado", alumnoService.actualizar(id, request));
+    @PreAuthorize("@sectionAccess.check('ALUMNOS') and @permisoAccess.check('ALUMNOS_EDITAR')")
+    public ApiResponse<AlumnoDto> actualizar(@AuthenticationPrincipal Usuario actor, @PathVariable Long id, @Valid @RequestBody AlumnoRequest request) {
+        return ApiResponse.ok("Alumno actualizado", alumnoService.actualizar(actor, id, request));
     }
 
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> desactivar(@PathVariable Long id) {
-        alumnoService.desactivar(id);
+    @PreAuthorize("@sectionAccess.check('ALUMNOS') and @permisoAccess.check('ALUMNOS_BAJA')")
+    public ApiResponse<Void> desactivar(@AuthenticationPrincipal Usuario actor, @PathVariable Long id) {
+        alumnoService.desactivar(actor, id);
         return ApiResponse.ok("Alumno dado de baja", null);
+    }
+
+    @PostMapping("/{id}/foto")
+    @PreAuthorize("@sectionAccess.check('ALUMNOS') and @permisoAccess.check('ALUMNOS_EDITAR')")
+    public ApiResponse<AlumnoDto> subirFoto(@AuthenticationPrincipal Usuario actor, @PathVariable Long id, @RequestParam("file") MultipartFile file) {
+        return ApiResponse.ok("Foto actualizada", alumnoService.subirFoto(actor, id, file));
     }
 }

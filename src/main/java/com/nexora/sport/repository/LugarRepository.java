@@ -13,8 +13,9 @@ public interface LugarRepository extends JpaRepository<Lugar, Long> {
     Page<Lugar> findByCentroId(Long centroId, Pageable pageable);
 
     @Query("select l from Lugar l where l.centro.id = :centroId and l.activo = true " +
-           "and (:sucursalId is null or l.sucursal.id = :sucursalId) " +
-           "and (:disciplinaId is null or :disciplinaId in (select d.id from l.disciplinas d)) " +
+           // cast(:x as long) en el "is null": ver nota en VentaRepository.
+           "and (cast(:sucursalId as long) is null or l.sucursal.id = :sucursalId) " +
+           "and (cast(:disciplinaId as long) is null or l.disciplinas is empty or :disciplinaId in (select d.id from l.disciplinas d)) " +
            "order by l.nombre")
     List<Lugar> buscarActivos(@Param("centroId") Long centroId,
                               @Param("sucursalId") Long sucursalId,

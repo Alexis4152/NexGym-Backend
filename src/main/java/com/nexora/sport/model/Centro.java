@@ -70,6 +70,31 @@ public class Centro {
     @Column(name = "dias_inactividad_riesgo", nullable = false)
     private int diasInactividadRiesgo = 14;
 
+    // ---- Notificaciones proactivas (seccion 18 del encargo: config sencilla por centro) ----
+
+    /** Vencimientos/pagos/renovaciones/avisos administrativos de membresia. */
+    @Column(name = "notificaciones_membresia_activo", nullable = false)
+    private boolean notificacionesMembresiaActivo = true;
+
+    /** Reservas, recordatorios y cambios/cancelaciones de clase. */
+    @Column(name = "notificaciones_clase_activo", nullable = false)
+    private boolean notificacionesClaseActivo = true;
+
+    @Column(name = "notificaciones_email_activo", nullable = false)
+    private boolean notificacionesEmailActivo = true;
+
+    /** Si esta apagado, las notificaciones se siguen generando (historial/auditoria) pero no aparecen en la campana. */
+    @Column(name = "notificaciones_interno_activo", nullable = false)
+    private boolean notificacionesInternoActivo = true;
+
+    /** CSV de dias-antes para avisar vencimiento de membresia, p.ej. "7,3,1,0" (0 = el mismo dia). */
+    @Column(name = "notificaciones_dias_antes_vencimiento", length = 60)
+    private String notificacionesDiasAntesVencimiento = "7,3,1,0";
+
+    /** Horas de anticipacion para el recordatorio de clase reservada. Null o 0 = desactivado. */
+    @Column(name = "notificaciones_horas_antes_clase")
+    private Integer notificacionesHorasAntesClase = 24;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 }

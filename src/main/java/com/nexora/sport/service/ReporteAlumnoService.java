@@ -93,7 +93,16 @@ public class ReporteAlumnoService {
     /** Reglas fijas (sin IA): membresia ACTIVA con fecha real + sin asistencia hace >= Centro.diasInactividadRiesgo dias. */
     @Transactional(readOnly = true)
     public List<RiesgoAbandonoItemDto> riesgoAbandono(Usuario actor) {
-        Long centroId = tenantScope.scopeId(actor);
+        return riesgoAbandonoPorCentro(tenantScope.scopeId(actor));
+    }
+
+    /**
+     * Misma regla que {@link #riesgoAbandono}, sin requerir un actor/tenant interactivo:
+     * usada por NotificacionSchedulerService para recorrer todos los centros en el job
+     * diario sin duplicar la formula (seccion 30 del encargo: una sola fuente de verdad).
+     */
+    @Transactional(readOnly = true)
+    public List<RiesgoAbandonoItemDto> riesgoAbandonoPorCentro(Long centroId) {
         int umbral = centroRepository.getReferenceById(centroId).getDiasInactividadRiesgo();
         LocalDate hoy = LocalDate.now();
         List<Membresia> activas = membresiaRepository.findActivasConFechaFin(centroId);
