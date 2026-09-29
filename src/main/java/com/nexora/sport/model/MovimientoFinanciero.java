@@ -68,6 +68,35 @@ public class MovimientoFinanciero {
     @JoinColumn(name = "registrado_por")
     private Usuario registradoPor;
 
+    /** Sucursal activa del actor al momento de registrar (ver TenantScope#sucursalActivaId).
+     * Null cuando quien registra es SUPER_ADMIN/SUPERVISOR operando "todas las sucursales" --
+     * en ese caso solo Dueno puede aprobar/rechazar el egreso (ver CajaService#assertPuedeResolver). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sucursal_id")
+    private Sucursal sucursal;
+
+    /** Comprobante (PDF/imagen, ver FileStorageService) del egreso. Un ingreso nunca lo pide. */
+    @Column(name = "comprobante_url", length = 300)
+    private String comprobanteUrl;
+
+    /** Un ingreso siempre nace APROBADO. Un egreso nace APROBADO si trae comprobante al
+     * registrarse, o PENDIENTE si no -- mientras este PENDIENTE, queda fuera de las sumas
+     * de reportes/dashboard (ver MovimientoFinancieroRepository) hasta que Dueno o el
+     * Encargado de esa sucursal lo apruebe o rechace. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "estado_aprobacion", nullable = false, length = 12)
+    private EstadoAprobacion estadoAprobacion = EstadoAprobacion.APROBADO;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "resuelto_por")
+    private Usuario resueltoPor;
+
+    @Column(name = "resuelto_en")
+    private LocalDateTime resueltoEn;
+
+    @Column(name = "rechazado_motivo", length = 300)
+    private String rechazadoMotivo;
+
     /**
      * Soft-void: true cuando el origen del movimiento (ej. un pago de membresia) se
      * cancelo/reverso. Nunca se borra la fila (trazabilidad); se excluye de sumas y

@@ -130,9 +130,15 @@ public class RolService {
 
         crearRolSistemaSiNoExiste(centro, "Recepcion", NivelJerarquia.OPERATIVO,
                 EnumSet.of(DASHBOARD, ALUMNOS, MEMBRESIAS, CAJA, CLASES, ASISTENCIA, INVENTARIO, TIENDA, NOTIFICACIONES),
+                // Recepcion vende en el POS (productos y membresias) y por eso abre/cierra
+                // su propio corte de caja (igual que DemoPV: cada cajero abre el suyo, ver
+                // VentaService#crear). Ve Clases/Instalaciones/Inventario/Planes en modo
+                // lectura: no tiene CLASES_CREAR/EDITAR/CANCELAR, INSTALACIONES_ADMINISTRAR,
+                // INVENTARIO_CREAR/EDITAR/ENTRADA/AJUSTE_NEGATIVO ni MEMBRESIAS_PLANES_ADMINISTRAR.
                 EnumSet.of(ALUMNOS_VER, ALUMNOS_CREAR, ALUMNOS_EDITAR,
                         MEMBRESIAS_VER, MEMBRESIAS_CREAR, MEMBRESIAS_RENOVAR, PAGOS_VER, PAGOS_REGISTRAR,
-                        APARTADOS_VER, CLASES_VER, ASISTENCIAS_VER, ASISTENCIAS_REGISTRAR));
+                        APARTADOS_VER, CLASES_VER, ASISTENCIAS_VER, ASISTENCIAS_REGISTRAR,
+                        INVENTARIO_VER, VENTAS_VER, VENTAS_CREAR, CAJA_VER, CAJA_ABRIR, CAJA_CERRAR));
 
         crearRolSistemaSiNoExiste(centro, "Entrenador", NivelJerarquia.OPERATIVO,
                 EnumSet.of(CLASES, ASISTENCIA, ALUMNOS),

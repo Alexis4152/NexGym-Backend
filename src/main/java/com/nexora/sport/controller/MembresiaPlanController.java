@@ -38,18 +38,21 @@ public class MembresiaPlanController {
     }
 
     @PostMapping
+    @PreAuthorize("@sectionAccess.check('MEMBRESIAS') and @permisoAccess.check('MEMBRESIAS_PLANES_ADMINISTRAR')")
     public ApiResponse<MembresiaPlanDto> crear(@AuthenticationPrincipal Usuario actor,
                                                 @Valid @RequestBody MembresiaPlanRequest request) {
         return ApiResponse.ok("Plan creado", membresiaPlanService.crear(actor, request));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("@sectionAccess.check('MEMBRESIAS') and @permisoAccess.check('MEMBRESIAS_PLANES_ADMINISTRAR')")
     public ApiResponse<MembresiaPlanDto> actualizar(@AuthenticationPrincipal Usuario actor, @PathVariable Long id,
                                                      @Valid @RequestBody MembresiaPlanRequest request) {
         return ApiResponse.ok("Plan actualizado", membresiaPlanService.actualizar(actor, id, request));
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("@sectionAccess.check('MEMBRESIAS') and @permisoAccess.check('MEMBRESIAS_PLANES_ADMINISTRAR')")
     public ApiResponse<Void> desactivar(@AuthenticationPrincipal Usuario actor, @PathVariable Long id) {
         membresiaPlanService.desactivar(actor, id);
         return ApiResponse.ok("Plan desactivado", null);

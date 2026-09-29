@@ -46,17 +46,20 @@ public class ClaseController {
     }
 
     @PostMapping
+    @PreAuthorize("@sectionAccess.check('CLASES') and @permisoAccess.check('CLASES_CREAR')")
     public ApiResponse<ClaseDto> crear(@AuthenticationPrincipal Usuario actor, @Valid @RequestBody ClaseRequest request) {
         return ApiResponse.ok("Clase creada", claseService.crear(actor, request));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("@sectionAccess.check('CLASES') and @permisoAccess.check('CLASES_EDITAR')")
     public ApiResponse<ClaseDto> actualizar(@AuthenticationPrincipal Usuario actor, @PathVariable Long id,
                                              @Valid @RequestBody ClaseRequest request) {
         return ApiResponse.ok("Clase actualizada", claseService.actualizar(actor, id, request));
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("@sectionAccess.check('CLASES') and @permisoAccess.check('CLASES_CANCELAR')")
     public ApiResponse<Void> desactivar(@PathVariable Long id) {
         claseService.desactivar(id);
         return ApiResponse.ok("Clase desactivada", null);

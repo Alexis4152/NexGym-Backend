@@ -13,10 +13,13 @@ import com.nexora.sport.security.TenantScope;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class CajaService {
@@ -29,21 +32,29 @@ public class CajaService {
             "Nomina", "Publicidad", "Otro egreso"
     };
 
+    private static final Set<String> COMPROBANTE_TIPOS_PERMITIDOS = Set.of("image/png", "image/jpeg", "image/webp", "application/pdf");
+    private static final long COMPROBANTE_TAMANIO_MAXIMO = 8L * 1024 * 1024; // 8MB
+
     private final CategoriaMovimientoRepository categoriaRepository;
     private final MovimientoFinancieroRepository movimientoRepository;
     private final CentroRepository centroRepository;
     private final AlumnoRepository alumnoRepository;
     private final ProveedorRepository proveedorRepository;
+    private final SucursalRepository sucursalRepository;
+    private final FileStorageService fileStorageService;
     private final TenantScope tenantScope;
 
     public CajaService(CategoriaMovimientoRepository categoriaRepository, MovimientoFinancieroRepository movimientoRepository,
                         CentroRepository centroRepository, AlumnoRepository alumnoRepository,
-                        ProveedorRepository proveedorRepository, TenantScope tenantScope) {
+                        ProveedorRepository proveedorRepository, SucursalRepository sucursalRepository,
+                        FileStorageService fileStorageService, TenantScope tenantScope) {
         this.categoriaRepository = categoriaRepository;
         this.movimientoRepository = movimientoRepository;
         this.centroRepository = centroRepository;
         this.alumnoRepository = alumnoRepository;
         this.proveedorRepository = proveedorRepository;
+        this.sucursalRepository = sucursalRepository;
+        this.fileStorageService = fileStorageService;
         this.tenantScope = tenantScope;
     }
 
@@ -97,6 +108,20 @@ public class CajaService {
 
     @Transactional
     public MovimientoFinancieroDto registrarMovimiento(Usuario actor, TipoMovimiento tipo, MovimientoFinancieroRequest request) {
+        return registrarMovimiento(actor, tipo, request, null);
+    }
+
+    /**
+     * Un INGRESO nunca pide comprobante y nace APROBADO (los ingresos reales hoy llegan
+     * solos via registrarIngresoDeVenta/registrarIngresoDeMembresia; este endpoint manual
+     * sigue existiendo para categorias sin flujo propio, ej. "Inscripcion"/"Otro ingreso").
+     * Un EGRESO nace APROBADO si trae comprobante en el momento de registrarse, o
+     * PENDIENTE si no -- en ese caso lo debe resolver Dueno o el Encargado de la sucursal
+     * (ver aprobar/rechazar) antes de que cuente en sumas/reportes.
+     */
+    @Transactional
+    public MovimientoFinancieroDto registrarMovimiento(Usuario actor, TipoMovimiento tipo, MovimientoFinancieroRequest request,
+                                                         MultipartFile comprobante) {
         Long centroId = tenantScope.scopeId(actor);
         CategoriaMovimiento categoria = categoriaRepository.findById(request.categoriaId())
                 .orElseThrow(() -> new ResourceNotFoundException("Categoria no encontrada"));
@@ -105,7 +130,81 @@ public class CajaService {
         }
         MovimientoFinanciero m = construir(centroId, tipo, categoria, request);
         m.setRegistradoPor(actor);
+        Long sucursalActiva = tenantScope.sucursalActivaId(actor);
+        if (sucursalActiva != null) m.setSucursal(sucursalRepository.getReferenceById(sucursalActiva));
+
+        if (tipo == TipoMovimiento.EGRESO) {
+            m = movimientoRepository.save(m); // necesita id antes de poder guardar el archivo
+            if (comprobante != null && !comprobante.isEmpty()) {
+                aplicarComprobante(m, comprobante);
+                m.setEstadoAprobacion(EstadoAprobacion.APROBADO);
+                m.setResueltoPor(actor);
+                m.setResueltoEn(LocalDateTime.now());
+            } else {
+                m.setEstadoAprobacion(EstadoAprobacion.PENDIENTE);
+            }
+        }
         return toDto(movimientoRepository.save(m));
+    }
+
+    private void aplicarComprobante(MovimientoFinanciero m, MultipartFile comprobante) {
+        String ruta = fileStorageService.guardar("egresos-comprobantes", m.getId(), comprobante,
+                COMPROBANTE_TIPOS_PERMITIDOS, COMPROBANTE_TAMANIO_MAXIMO);
+        m.setComprobanteUrl(ruta);
+    }
+
+    /** Bandeja de aprobacion (ver findPendientes): Dueno ve todos los pendientes del
+     * centro; un Encargado solo los de las sucursales que administra. */
+    @Transactional(readOnly = true)
+    public PageResponse<MovimientoFinancieroDto> listarPendientes(Usuario actor, Pageable pageable) {
+        assertPuedeResolver(actor);
+        Long centroId = tenantScope.scopeId(actor);
+        Set<Long> sucursalIds = tenantScope.isSupervisorOSuperior(actor) ? null : tenantScope.sucursalesPermitidas(actor);
+        return PageResponse.of(movimientoRepository.findPendientes(centroId, sucursalIds, pageable), this::toDto);
+    }
+
+    @Transactional
+    public MovimientoFinancieroDto aprobar(Usuario actor, Long movimientoId) {
+        MovimientoFinanciero m = buscarPendiente(actor, movimientoId);
+        m.setEstadoAprobacion(EstadoAprobacion.APROBADO);
+        m.setResueltoPor(actor);
+        m.setResueltoEn(LocalDateTime.now());
+        return toDto(movimientoRepository.save(m));
+    }
+
+    @Transactional
+    public MovimientoFinancieroDto rechazar(Usuario actor, Long movimientoId, String motivo) {
+        MovimientoFinanciero m = buscarPendiente(actor, movimientoId);
+        m.setEstadoAprobacion(EstadoAprobacion.RECHAZADO);
+        m.setRechazadoMotivo(motivo);
+        m.setResueltoPor(actor);
+        m.setResueltoEn(LocalDateTime.now());
+        return toDto(movimientoRepository.save(m));
+    }
+
+    private MovimientoFinanciero buscarPendiente(Usuario actor, Long movimientoId) {
+        assertPuedeResolver(actor);
+        MovimientoFinanciero m = movimientoRepository.findById(movimientoId)
+                .orElseThrow(() -> new ResourceNotFoundException("Movimiento no encontrado"));
+        if (m.getCentro() == null || !m.getCentro().getId().equals(tenantScope.scopeId(actor))) {
+            throw new ResourceNotFoundException("Movimiento no encontrado");
+        }
+        if (m.getEstadoAprobacion() != EstadoAprobacion.PENDIENTE) {
+            throw new IllegalStateException("Este egreso ya fue resuelto");
+        }
+        if (!tenantScope.isSupervisorOSuperior(actor)
+                && (m.getSucursal() == null || !tenantScope.sucursalPermite(actor, m.getSucursal().getId()))) {
+            throw new IllegalStateException("No administras la sucursal de este egreso");
+        }
+        return m;
+    }
+
+    /** Solo Dueno/SUPER_ADMIN o un Encargado (nunca Recepcion/Caja-Ventas, aunque tengan
+     * CAJA_MOVIMIENTO para poder registrar) pueden aprobar o rechazar un egreso pendiente. */
+    private void assertPuedeResolver(Usuario actor) {
+        if (!tenantScope.isAdminOSuperior(actor)) {
+            throw new IllegalStateException("Solo el Dueno o el Encargado de sucursal pueden aprobar o rechazar egresos");
+        }
     }
 
     @Transactional
@@ -189,7 +288,15 @@ public class CajaService {
                 m.getAlumno() != null ? m.getAlumno().getId() : null,
                 m.getAlumno() != null ? m.getAlumno().getNombre() : null,
                 m.getProveedor() != null ? m.getProveedor().getId() : null,
-                m.getProveedor() != null ? m.getProveedor().getNombre() : null
+                m.getProveedor() != null ? m.getProveedor().getNombre() : null,
+                m.getSucursal() != null ? m.getSucursal().getId() : null,
+                m.getSucursal() != null ? m.getSucursal().getNombre() : null,
+                m.getRegistradoPor() != null ? m.getRegistradoPor().getNombre() : null,
+                m.getComprobanteUrl(),
+                m.getEstadoAprobacion().name(),
+                m.getResueltoPor() != null ? m.getResueltoPor().getNombre() : null,
+                m.getResueltoEn(),
+                m.getRechazadoMotivo()
         );
     }
 }

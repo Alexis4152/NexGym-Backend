@@ -119,6 +119,9 @@ public class InventarioService {
         if (request.delta() < 0 && !PermisoEvaluator.tiene(actor, Permiso.INVENTARIO_AJUSTE_NEGATIVO)) {
             throw new IllegalStateException("No tienes permiso para quitar piezas del inventario");
         }
+        if (request.delta() > 0 && !PermisoEvaluator.tiene(actor, Permiso.INVENTARIO_ENTRADA)) {
+            throw new IllegalStateException("No tienes permiso para agregar piezas al inventario");
+        }
         ArticuloInventario a = buscar(id);
         int anterior = a.getStock();
         int nuevo = anterior + request.delta();

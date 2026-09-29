@@ -10,7 +10,9 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -54,10 +56,44 @@ public class CajaController {
         return ApiResponse.ok("Ingreso registrado", cajaService.registrarMovimiento(actor, TipoMovimiento.INGRESO, request));
     }
 
-    @PostMapping("/egresos")
+    /** multipart (no JSON): el comprobante (PDF/imagen, opcional) viaja en la misma
+     * peticion que los datos del egreso -- ver CajaService#registrarMovimiento. Sin
+     * comprobante, el egreso nace PENDIENTE de aprobacion. */
+    @PostMapping(value = "/egresos", consumes = "multipart/form-data")
     @PreAuthorize("@sectionAccess.check('CAJA') and @permisoAccess.check('CAJA_MOVIMIENTO')")
-    public ApiResponse<MovimientoFinancieroDto> registrarEgreso(@AuthenticationPrincipal Usuario actor,
-                                                                  @Valid @RequestBody MovimientoFinancieroRequest request) {
-        return ApiResponse.ok("Egreso registrado", cajaService.registrarMovimiento(actor, TipoMovimiento.EGRESO, request));
+    public ApiResponse<MovimientoFinancieroDto> registrarEgreso(
+            @AuthenticationPrincipal Usuario actor,
+            @RequestParam Long categoriaId,
+            @RequestParam BigDecimal monto,
+            @RequestParam(required = false) String metodoPago,
+            @RequestParam(required = false) String descripcion,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
+            @RequestParam(required = false) Long alumnoId,
+            @RequestParam(required = false) Long proveedorId,
+            @RequestParam(required = false) MultipartFile comprobante) {
+        var request = new MovimientoFinancieroRequest(categoriaId, monto, metodoPago, descripcion, fecha, alumnoId, proveedorId);
+        return ApiResponse.ok("Egreso registrado", cajaService.registrarMovimiento(actor, TipoMovimiento.EGRESO, request, comprobante));
+    }
+
+    /** Bandeja de aprobacion: Dueno ve todos los egresos pendientes del centro; un
+     * Encargado solo los de las sucursales que administra (ver CajaService#listarPendientes). */
+    @GetMapping("/egresos/pendientes")
+    public ApiResponse<PageResponse<MovimientoFinancieroDto>> listarPendientes(@AuthenticationPrincipal Usuario actor,
+                                                                                 @RequestParam(defaultValue = "0") int page,
+                                                                                 @RequestParam(defaultValue = "20") int size) {
+        return ApiResponse.ok(cajaService.listarPendientes(actor, PageRequest.of(page, size)));
+    }
+
+    @PostMapping("/movimientos/{id}/aprobar")
+    @PreAuthorize("@sectionAccess.check('CAJA') and @permisoAccess.check('CAJA_MOVIMIENTO')")
+    public ApiResponse<MovimientoFinancieroDto> aprobar(@AuthenticationPrincipal Usuario actor, @PathVariable Long id) {
+        return ApiResponse.ok("Egreso aprobado", cajaService.aprobar(actor, id));
+    }
+
+    @PostMapping("/movimientos/{id}/rechazar")
+    @PreAuthorize("@sectionAccess.check('CAJA') and @permisoAccess.check('CAJA_MOVIMIENTO')")
+    public ApiResponse<MovimientoFinancieroDto> rechazar(@AuthenticationPrincipal Usuario actor, @PathVariable Long id,
+                                                          @Valid @RequestBody RechazarMovimientoRequest request) {
+        return ApiResponse.ok("Egreso rechazado", cajaService.rechazar(actor, id, request.motivo()));
     }
 }

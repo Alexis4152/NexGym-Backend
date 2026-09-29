@@ -40,16 +40,19 @@ public class LugarController {
     }
 
     @PostMapping
+    @PreAuthorize("@sectionAccess.check('CLASES') and @permisoAccess.check('INSTALACIONES_ADMINISTRAR')")
     public ApiResponse<LugarDto> crear(@AuthenticationPrincipal Usuario actor, @Valid @RequestBody LugarRequest request) {
         return ApiResponse.ok("Lugar creado", lugarService.crear(actor, request));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("@sectionAccess.check('CLASES') and @permisoAccess.check('INSTALACIONES_ADMINISTRAR')")
     public ApiResponse<LugarDto> actualizar(@PathVariable Long id, @Valid @RequestBody LugarRequest request) {
         return ApiResponse.ok("Lugar actualizado", lugarService.actualizar(id, request));
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("@sectionAccess.check('CLASES') and @permisoAccess.check('INSTALACIONES_ADMINISTRAR')")
     public ApiResponse<Void> desactivar(@PathVariable Long id) {
         lugarService.desactivar(id);
         return ApiResponse.ok("Lugar desactivado", null);

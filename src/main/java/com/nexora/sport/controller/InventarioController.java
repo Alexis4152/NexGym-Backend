@@ -32,6 +32,7 @@ public class InventarioController {
     }
 
     @PostMapping("/categorias")
+    @PreAuthorize("@sectionAccess.check('INVENTARIO') and @permisoAccess.check('INVENTARIO_CREAR')")
     public ApiResponse<CategoriaInventarioDto> crearCategoria(@AuthenticationPrincipal Usuario actor,
                                                                 @Valid @RequestBody CategoriaInventarioRequest request) {
         return ApiResponse.ok("Categoria creada", inventarioService.crearCategoria(actor, request));
@@ -59,18 +60,21 @@ public class InventarioController {
     }
 
     @PostMapping("/articulos")
+    @PreAuthorize("@sectionAccess.check('INVENTARIO') and @permisoAccess.check('INVENTARIO_CREAR')")
     public ApiResponse<ArticuloInventarioDto> crear(@AuthenticationPrincipal Usuario actor,
                                                       @Valid @RequestBody ArticuloInventarioRequest request) {
         return ApiResponse.ok("Articulo creado", inventarioService.crear(actor, request));
     }
 
     @PutMapping("/articulos/{id}")
+    @PreAuthorize("@sectionAccess.check('INVENTARIO') and @permisoAccess.check('INVENTARIO_EDITAR')")
     public ApiResponse<ArticuloInventarioDto> actualizar(@PathVariable Long id,
                                                            @Valid @RequestBody ArticuloInventarioRequest request) {
         return ApiResponse.ok("Articulo actualizado", inventarioService.actualizar(id, request));
     }
 
     @DeleteMapping("/articulos/{id}")
+    @PreAuthorize("@sectionAccess.check('INVENTARIO') and @permisoAccess.check('INVENTARIO_EDITAR')")
     public ApiResponse<Void> desactivar(@PathVariable Long id) {
         inventarioService.desactivar(id);
         return ApiResponse.ok("Articulo desactivado", null);
@@ -88,17 +92,20 @@ public class InventarioController {
     }
 
     @PostMapping("/articulos/{id}/imagenes")
+    @PreAuthorize("@sectionAccess.check('INVENTARIO') and @permisoAccess.check('INVENTARIO_EDITAR')")
     public ApiResponse<ImagenArticuloDto> subirImagen(@PathVariable Long id, @RequestParam("file") MultipartFile file) {
         return ApiResponse.ok("Foto agregada", imagenArticuloService.subir(inventarioService.buscar(id), file));
     }
 
     @PutMapping("/articulos/{id}/imagenes/{imagenId}/principal")
+    @PreAuthorize("@sectionAccess.check('INVENTARIO') and @permisoAccess.check('INVENTARIO_EDITAR')")
     public ApiResponse<Void> marcarPrincipal(@PathVariable Long id, @PathVariable Long imagenId) {
         imagenArticuloService.marcarPrincipal(id, imagenId);
         return ApiResponse.ok("Portada actualizada", null);
     }
 
     @DeleteMapping("/articulos/{id}/imagenes/{imagenId}")
+    @PreAuthorize("@sectionAccess.check('INVENTARIO') and @permisoAccess.check('INVENTARIO_EDITAR')")
     public ApiResponse<Void> eliminarImagen(@PathVariable Long id, @PathVariable Long imagenId) {
         imagenArticuloService.eliminar(id, imagenId);
         return ApiResponse.ok("Foto eliminada", null);
