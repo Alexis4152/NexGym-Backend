@@ -49,6 +49,14 @@ public class Alumno {
     @Column(name = "foto_url", length = 300)
     private String fotoUrl;
 
+    /** Token opaco unico (UUID) para el QR personal del alumno: lo genera
+     * AlumnoService#crear y lo escanea un lector fisico (mismo mecanismo que un
+     * codigo de barras) en Asistencia/POS/formularios de busqueda para identificarlo
+     * sin escribir su nombre. Globalmente unico (no solo por centro), asi que su
+     * busqueda no necesita acotarse por centro antes de validar pertenencia. */
+    @Column(name = "codigo_qr", unique = true, length = 40)
+    private String codigoQr;
+
     @Column(length = 1000)
     private String observaciones;
 

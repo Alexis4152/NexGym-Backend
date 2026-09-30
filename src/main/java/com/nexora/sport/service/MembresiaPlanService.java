@@ -12,6 +12,7 @@ import com.nexora.sport.model.Usuario;
 import com.nexora.sport.repository.CentroRepository;
 import com.nexora.sport.repository.DisciplinaRepository;
 import com.nexora.sport.repository.MembresiaPlanRepository;
+import com.nexora.sport.repository.MembresiaRepository;
 import com.nexora.sport.security.TenantScope;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -28,13 +29,15 @@ public class MembresiaPlanService {
     private final MembresiaPlanRepository membresiaPlanRepository;
     private final DisciplinaRepository disciplinaRepository;
     private final CentroRepository centroRepository;
+    private final MembresiaRepository membresiaRepository;
     private final TenantScope tenantScope;
 
     public MembresiaPlanService(MembresiaPlanRepository membresiaPlanRepository, DisciplinaRepository disciplinaRepository,
-                                 CentroRepository centroRepository, TenantScope tenantScope) {
+                                 CentroRepository centroRepository, MembresiaRepository membresiaRepository, TenantScope tenantScope) {
         this.membresiaPlanRepository = membresiaPlanRepository;
         this.disciplinaRepository = disciplinaRepository;
         this.centroRepository = centroRepository;
+        this.membresiaRepository = membresiaRepository;
         this.tenantScope = tenantScope;
     }
 
@@ -153,11 +156,13 @@ public class MembresiaPlanService {
     }
 
     public MembresiaPlanDto toDto(MembresiaPlan p) {
+        long inscritos = membresiaRepository.countVigentesPorPlan(p.getId());
+        Integer cupoDisponible = p.getLimiteAlumnos() != null ? Math.max(0, p.getLimiteAlumnos() - (int) inscritos) : null;
         return new MembresiaPlanDto(
                 p.getId(), p.getNombre(), p.getTipoPlan().name(),
                 p.getDuracionCantidad(), p.getDuracionUnidad() != null ? p.getDuracionUnidad().name() : null,
                 p.getNumeroClasesIncluidas(), p.getPrecio(), p.isAccesoCompleto(), p.getMaxDisciplinasSeleccionables(),
-                p.isPermiteAbonos(), p.getMontoMinimoAbono(), p.getLimiteAlumnos(), p.isActivo(),
+                p.isPermiteAbonos(), p.getMontoMinimoAbono(), p.getLimiteAlumnos(), inscritos, cupoDisponible, p.isActivo(),
                 p.getDisciplinas().stream().map(Disciplina::getId).collect(Collectors.toSet()),
                 p.getDisciplinas().stream().map(Disciplina::getNombre).collect(Collectors.toSet())
         );

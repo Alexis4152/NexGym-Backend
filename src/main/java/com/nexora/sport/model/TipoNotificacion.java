@@ -22,5 +22,30 @@ public enum TipoNotificacion {
     ADMIN_MEMBRESIAS_POR_VENCER,
     ADMIN_ALUMNOS_SALDO_PENDIENTE,
     ADMIN_CLASE_CUPO_LLENO,
-    ADMIN_ALUMNO_RIESGO_ABANDONO
+    ADMIN_CLASE_CUPO_DISPONIBLE,
+    ADMIN_ALUMNO_RIESGO_ABANDONO,
+
+    // Dueno/Recepcion/Encargado (broadcast CENTRO_ADMIN, ver Notificacion#seccionObjetivo)
+    ADMIN_MEMBRESIA_NUEVA,
+    ADMIN_MEMBRESIA_AGOTADA,
+    ADMIN_MEMBRESIA_CANCELADA_O_VENCIDA,
+    ADMIN_PLAN_LLENO,
+    ADMIN_STOCK_BAJO,
+    ADMIN_STOCK_AGOTADO,
+    ADMIN_STOCK_RECUPERADO,
+    ADMIN_PRODUCTO_NUEVO,
+    ADMIN_CLASE_NUEVA,
+    ADMIN_DISCIPLINA_NUEVA,
+    ADMIN_ALUMNO_NUEVO,
+    /** Solo Dueno/Encargado (ver Notificacion#seccionObjetivo=CAJA + nivel Encargado+ en NotificacionService). */
+    EGRESO_PENDIENTE_APROBACION,
+
+    // Entrenador (destinatarioTipo=INSTRUCTOR: email a Instructor.email siempre, y bandeja
+    // en-app si Instructor.usuario esta ligado)
+    INSTRUCTOR_CLASE_ASIGNADA,
+    INSTRUCTOR_CLASE_CANCELADA,
+    INSTRUCTOR_ALUMNO_INSCRITO,
+    INSTRUCTOR_ALUMNO_REMOVIDO,
+    INSTRUCTOR_DISCIPLINA_ASIGNADA,
+    INSTRUCTOR_SUCURSAL_CAMBIADA
 }

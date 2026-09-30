@@ -129,7 +129,7 @@ public class RolService {
                         NOTIFICACIONES_CONFIGURAR));
 
         crearRolSistemaSiNoExiste(centro, "Recepcion", NivelJerarquia.OPERATIVO,
-                EnumSet.of(DASHBOARD, ALUMNOS, MEMBRESIAS, CAJA, CLASES, ASISTENCIA, INVENTARIO, TIENDA, NOTIFICACIONES),
+                EnumSet.of(DASHBOARD, ALUMNOS, MEMBRESIAS, CAJA, CLASES, DISCIPLINAS, ASISTENCIA, INVENTARIO, TIENDA, NOTIFICACIONES),
                 // Recepcion vende en el POS (productos y membresias) y por eso abre/cierra
                 // su propio corte de caja (igual que DemoPV: cada cajero abre el suyo, ver
                 // VentaService#crear). Ve Clases/Instalaciones/Inventario/Planes en modo
@@ -140,17 +140,21 @@ public class RolService {
                         APARTADOS_VER, CLASES_VER, ASISTENCIAS_VER, ASISTENCIAS_REGISTRAR,
                         INVENTARIO_VER, VENTAS_VER, VENTAS_CREAR, CAJA_VER, CAJA_ABRIR, CAJA_CERRAR));
 
+        // NOTIFICACIONES aqui NO abre el broadcast general de Recepcion/Encargado/Dueno
+        // (ver NotificacionService#esPersonalOperativo): un Entrenador solo vera sus
+        // propios avisos (INSTRUCTOR_*, ver destinatarioTipo=INSTRUCTOR) mas alla de
+        // tener esta seccion, que solo habilita la pantalla/endpoint de notificaciones.
         crearRolSistemaSiNoExiste(centro, "Entrenador", NivelJerarquia.OPERATIVO,
-                EnumSet.of(CLASES, ASISTENCIA, ALUMNOS),
+                EnumSet.of(CLASES, ASISTENCIA, ALUMNOS, NOTIFICACIONES),
                 EnumSet.of(CLASES_VER, ASISTENCIAS_VER, ASISTENCIAS_REGISTRAR, ALUMNOS_VER));
 
         crearRolSistemaSiNoExiste(centro, "Caja / Ventas", NivelJerarquia.OPERATIVO,
-                EnumSet.of(DASHBOARD, CAJA, TIENDA, INVENTARIO),
+                EnumSet.of(DASHBOARD, CAJA, TIENDA, INVENTARIO, NOTIFICACIONES),
                 EnumSet.of(CAJA_VER, CAJA_ABRIR, CAJA_MOVIMIENTO, CAJA_CERRAR,
                         VENTAS_VER, VENTAS_CREAR, INVENTARIO_VER, APARTADOS_VER, APARTADOS_GESTIONAR));
 
         crearRolSistemaSiNoExiste(centro, "Encargado de Inventario", NivelJerarquia.OPERATIVO,
-                EnumSet.of(DASHBOARD, INVENTARIO),
+                EnumSet.of(DASHBOARD, INVENTARIO, NOTIFICACIONES),
                 EnumSet.of(INVENTARIO_VER, INVENTARIO_CREAR, INVENTARIO_EDITAR, INVENTARIO_ENTRADA));
     }
 

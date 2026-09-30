@@ -36,11 +36,12 @@ public class InstructorService {
     private final SucursalRepository sucursalRepository;
     private final TenantScope tenantScope;
     private final FileStorageService fileStorageService;
+    private final NotificacionService notificacionService;
 
     public InstructorService(InstructorRepository instructorRepository, DisciplinaRepository disciplinaRepository,
                               CentroRepository centroRepository, UsuarioRepository usuarioRepository,
                               SucursalRepository sucursalRepository, TenantScope tenantScope,
-                              FileStorageService fileStorageService) {
+                              FileStorageService fileStorageService, NotificacionService notificacionService) {
         this.instructorRepository = instructorRepository;
         this.disciplinaRepository = disciplinaRepository;
         this.centroRepository = centroRepository;
@@ -48,6 +49,7 @@ public class InstructorService {
         this.sucursalRepository = sucursalRepository;
         this.tenantScope = tenantScope;
         this.fileStorageService = fileStorageService;
+        this.notificacionService = notificacionService;
     }
 
     /** Filtra por la SUCURSAL ACTIVA (una sola, ver TenantScope#sucursalActivaId):
@@ -102,8 +104,24 @@ public class InstructorService {
     public InstructorDto actualizar(Usuario actor, Long id, InstructorRequest request) {
         Long centroId = tenantScope.scopeId(actor);
         Instructor instructor = buscarDelCentro(actor, centroId, id);
+        Set<Long> disciplinasAntes = instructor.getDisciplinas().stream().map(Disciplina::getId).collect(Collectors.toSet());
+        Set<Long> sucursalesAntesIds = instructor.getSucursales().stream().map(Sucursal::getId).collect(Collectors.toSet());
+
         aplicar(centroId, instructor, request);
-        return toDto(instructorRepository.save(instructor));
+        instructor = instructorRepository.save(instructor);
+
+        for (Disciplina d : instructor.getDisciplinas()) {
+            if (!disciplinasAntes.contains(d.getId())) {
+                notificacionService.notificarInstructorDisciplinaAsignada(instructor, d);
+            }
+        }
+        Set<Long> sucursalesDespuesIds = instructor.getSucursales().stream().map(Sucursal::getId).collect(Collectors.toSet());
+        if (!sucursalesAntesIds.equals(sucursalesDespuesIds)) {
+            String texto = instructor.getSucursales().isEmpty() ? "todas"
+                    : instructor.getSucursales().stream().map(Sucursal::getNombre).collect(Collectors.joining(", "));
+            notificacionService.notificarInstructorSucursalCambiada(instructor, texto);
+        }
+        return toDto(instructor);
     }
 
     @Transactional

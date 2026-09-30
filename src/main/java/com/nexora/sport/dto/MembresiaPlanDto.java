@@ -16,6 +16,9 @@ public record MembresiaPlanDto(
         boolean permiteAbonos,
         BigDecimal montoMinimoAbono,
         Integer limiteAlumnos,
+        long inscritosActuales,
+        /** Null cuando el plan no tiene limite (cupo ilimitado); nunca negativo. */
+        Integer cupoDisponible,
         boolean activo,
         Set<Long> disciplinaIds,
         Set<String> disciplinaNombres

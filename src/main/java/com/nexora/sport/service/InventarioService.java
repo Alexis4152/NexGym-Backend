@@ -27,11 +27,12 @@ public class InventarioService {
     private final CentroRepository centroRepository;
     private final ImagenArticuloRepository imagenArticuloRepository;
     private final TenantScope tenantScope;
+    private final NotificacionService notificacionService;
 
     public InventarioService(ArticuloInventarioRepository articuloRepository, CategoriaInventarioRepository categoriaRepository,
                               MovimientoInventarioRepository movimientoRepository, DisciplinaRepository disciplinaRepository,
                               CentroRepository centroRepository, ImagenArticuloRepository imagenArticuloRepository,
-                              TenantScope tenantScope) {
+                              TenantScope tenantScope, NotificacionService notificacionService) {
         this.articuloRepository = articuloRepository;
         this.categoriaRepository = categoriaRepository;
         this.movimientoRepository = movimientoRepository;
@@ -39,6 +40,7 @@ public class InventarioService {
         this.centroRepository = centroRepository;
         this.imagenArticuloRepository = imagenArticuloRepository;
         this.tenantScope = tenantScope;
+        this.notificacionService = notificacionService;
     }
 
     // ---- Categorias ----
@@ -87,7 +89,9 @@ public class InventarioService {
         ArticuloInventario a = new ArticuloInventario();
         a.setCentro(centroRepository.getReferenceById(centroId));
         aplicar(a, request);
-        return toDto(articuloRepository.save(a));
+        a = articuloRepository.save(a);
+        notificacionService.notificarAdminProductoNuevo(a);
+        return toDto(a);
     }
 
     @Transactional
@@ -138,11 +142,30 @@ public class InventarioService {
         mov.setRegistradoPor(actor);
         movimientoRepository.save(mov);
 
+        verificarUmbralesStock(a, anterior);
         return toDto(a);
     }
 
+    /** Avisa cuando el stock CRUZA un umbral (no en cada movimiento mientras se queda del
+     * mismo lado): se agoto, se recupero, o cayo a stock bajo. La usa tanto
+     * ajustarStock() como VentaService al descontar por una venta. */
+    public void verificarUmbralesStock(ArticuloInventario a, int stockAnterior) {
+        int nuevo = a.getStock();
+        if (stockAnterior > 0 && nuevo == 0) {
+            notificacionService.notificarAdminStockAgotado(a);
+        } else if (stockAnterior == 0 && nuevo > 0) {
+            notificacionService.notificarAdminStockRecuperado(a);
+        } else if (nuevo > 0 && nuevo <= a.getStockMinimo() && stockAnterior > a.getStockMinimo()) {
+            notificacionService.notificarAdminStockBajo(a);
+        }
+    }
+
     private void aplicar(ArticuloInventario a, ArticuloInventarioRequest request) {
-        a.setCategoria(request.categoriaId() != null ? categoriaRepository.getReferenceById(request.categoriaId()) : null);
+        Set<CategoriaInventario> categorias = new HashSet<>();
+        if (request.categoriaIds() != null) {
+            request.categoriaIds().forEach(id -> categorias.add(categoriaRepository.getReferenceById(id)));
+        }
+        a.setCategorias(categorias);
         a.setNombre(request.nombre());
         a.setTipo(TipoArticulo.valueOf(request.tipo()));
         a.setCodigoBarras(request.codigoBarras() == null || request.codigoBarras().isBlank() ? null : request.codigoBarras());
@@ -176,8 +199,9 @@ public class InventarioService {
         String imagenUrl = imagenArticuloRepository.findFirstByArticuloIdAndEsPrincipalTrue(a.getId())
                 .map(ImagenArticulo::getRuta).orElse(a.getImagenUrl());
         return new ArticuloInventarioDto(
-                a.getId(), a.getCategoria() != null ? a.getCategoria().getId() : null,
-                a.getCategoria() != null ? a.getCategoria().getNombre() : null,
+                a.getId(),
+                a.getCategorias().stream().map(CategoriaInventario::getId).collect(Collectors.toSet()),
+                a.getCategorias().stream().map(CategoriaInventario::getNombre).collect(Collectors.toSet()),
                 a.getNombre(), a.getTipo().name(), a.getCodigoBarras(), a.getStock(), a.getStockMinimo(),
                 a.getCosto(), a.getPrecioVenta(), a.isVendible(), imagenUrl, a.isReservable(),
                 a.getDescuentoApartadoPorcentaje(), a.isActivo(),

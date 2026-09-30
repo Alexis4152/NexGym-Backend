@@ -8,6 +8,7 @@ import com.nexora.sport.exception.ResourceNotFoundException;
 import com.nexora.sport.model.*;
 import com.nexora.sport.repository.AlumnoRepository;
 import com.nexora.sport.repository.CentroRepository;
+import com.nexora.sport.repository.CorteCajaRepository;
 import com.nexora.sport.repository.MembresiaPlanRepository;
 import com.nexora.sport.repository.MembresiaRepository;
 import com.nexora.sport.repository.PagoMembresiaRepository;
@@ -38,12 +39,14 @@ public class MembresiaService {
     private final CentroRepository centroRepository;
     private final PagoMembresiaRepository pagoMembresiaRepository;
     private final PagoMembresiaService pagoMembresiaService;
+    private final CorteCajaRepository corteCajaRepository;
     private final TenantScope tenantScope;
     private final NotificacionService notificacionService;
 
     public MembresiaService(MembresiaRepository membresiaRepository, MembresiaPlanRepository planRepository,
                              AlumnoRepository alumnoRepository, CentroRepository centroRepository,
                              PagoMembresiaRepository pagoMembresiaRepository, PagoMembresiaService pagoMembresiaService,
+                             CorteCajaRepository corteCajaRepository,
                              TenantScope tenantScope, NotificacionService notificacionService) {
         this.membresiaRepository = membresiaRepository;
         this.planRepository = planRepository;
@@ -51,6 +54,7 @@ public class MembresiaService {
         this.centroRepository = centroRepository;
         this.pagoMembresiaRepository = pagoMembresiaRepository;
         this.pagoMembresiaService = pagoMembresiaService;
+        this.corteCajaRepository = corteCajaRepository;
         this.tenantScope = tenantScope;
         this.notificacionService = notificacionService;
     }
@@ -83,8 +87,10 @@ public class MembresiaService {
 
     @Transactional
     public MembresiaDto crear(Usuario actor, MembresiaRequest request) {
+        assertCorteAbierto(actor);
         Long centroId = tenantScope.scopeId(actor);
         MembresiaPlan plan = buscarPlanDelCentro(request.planId(), centroId);
+        assertCupoDisponible(plan);
         Alumno alumno = buscarAlumnoDelCentro(request.alumnoId(), centroId);
 
         LocalDate inicio = request.fechaInicio() != null ? request.fechaInicio() : LocalDate.now();
@@ -95,11 +101,16 @@ public class MembresiaService {
 
         registrarPagoInicialSiAplica(actor, centroId, m, request.montoPagoInicial(), request.metodoPago());
         notificacionService.notificarMembresiaNueva(m);
+        notificacionService.notificarAdminMembresiaNueva(m);
+        if (plan.getLimiteAlumnos() != null && membresiaRepository.countVigentesPorPlan(plan.getId()) >= plan.getLimiteAlumnos()) {
+            notificacionService.notificarAdminPlanLleno(plan);
+        }
         return toDto(m);
     }
 
     @Transactional
     public MembresiaDto renovar(Usuario actor, Long membresiaAnteriorId, MembresiaRenovarRequest request) {
+        assertCorteAbierto(actor);
         Long centroId = tenantScope.scopeId(actor);
         Membresia anterior = buscarDelCentro(membresiaAnteriorId, centroId);
         if (anterior.getEstado() == EstadoMembresia.CANCELADA) {
@@ -178,7 +189,9 @@ public class MembresiaService {
         m.setCanceladaMotivo(motivo);
         m.setCanceladaEn(LocalDateTime.now());
         m.setCanceladaPor(actor);
-        return toDto(membresiaRepository.save(m));
+        m = membresiaRepository.save(m);
+        notificacionService.notificarAdminMembresiaCanceladaOVencida(m, "fue cancelada");
+        return toDto(m);
     }
 
     public Membresia buscar(Long id) {
@@ -193,6 +206,14 @@ public class MembresiaService {
         return m;
     }
 
+    /** Registrar/renovar una membresia puede cobrar de inmediato (montoPagoInicial), asi
+     * que exige un corte de caja propio abierto igual que VentaService#crear -- sin
+     * excepcion para Dueno/SUPER_ADMIN, mismo criterio que ya aplica al vender en el POS. */
+    private void assertCorteAbierto(Usuario actor) {
+        corteCajaRepository.findFirstByUsuarioIdAndEstado(actor.getId(), EstadoCorteCaja.ABIERTO)
+                .orElseThrow(() -> new IllegalStateException("Debes abrir un corte de caja antes de registrar una membresia"));
+    }
+
     private MembresiaPlan buscarPlanDelCentro(Long planId, Long centroId) {
         MembresiaPlan plan = planRepository.findById(planId)
                 .orElseThrow(() -> new ResourceNotFoundException("Plan no encontrado"));
@@ -203,6 +224,16 @@ public class MembresiaService {
             throw new IllegalStateException("Este plan esta desactivado");
         }
         return plan;
+    }
+
+    /** Solo aplica a contrataciones NUEVAS (crear): una renovacion es del mismo alumno
+     * que ya ocupaba el cupo, no le suma un lugar nuevo al plan. */
+    private void assertCupoDisponible(MembresiaPlan plan) {
+        if (plan.getLimiteAlumnos() == null) return;
+        long ocupados = membresiaRepository.countVigentesPorPlan(plan.getId());
+        if (ocupados >= plan.getLimiteAlumnos()) {
+            throw new IllegalStateException("Este plan ya alcanzo su cupo maximo de alumnos");
+        }
     }
 
     private Alumno buscarAlumnoDelCentro(Long alumnoId, Long centroId) {

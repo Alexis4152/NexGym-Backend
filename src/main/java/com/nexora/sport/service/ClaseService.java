@@ -138,7 +138,10 @@ public class ClaseService {
         Clase clase = new Clase();
         clase.setCentro(centroRepository.getReferenceById(tenantScope.scopeId(actor)));
         aplicar(actor, clase, request, null);
-        return toDto(claseRepository.save(clase));
+        clase = claseRepository.save(clase);
+        notificacionService.notificarAdminClaseNueva(clase);
+        notificacionService.notificarInstructorClaseAsignada(clase);
+        return toDto(clase);
     }
 
     @Transactional
@@ -152,6 +155,10 @@ public class ClaseService {
         clase = claseRepository.save(clase);
 
         notificarCambiosAFuturasReservas(clase, horaInicioAnterior, horaFinAnterior, instructorAnteriorId);
+        Long instructorNuevoId = clase.getInstructor() != null ? clase.getInstructor().getId() : null;
+        if (!Objects.equals(instructorAnteriorId, instructorNuevoId)) {
+            notificacionService.notificarInstructorClaseAsignada(clase);
+        }
         return toDto(clase);
     }
 
@@ -191,6 +198,7 @@ public class ClaseService {
         for (Reserva r : afectadas) {
             notificacionService.notificarClaseCanceladaPorReserva(r);
         }
+        notificacionService.notificarInstructorClaseCancelada(clase);
     }
 
     private void aplicar(Usuario actor, Clase clase, ClaseRequest request, Long excludeId) {

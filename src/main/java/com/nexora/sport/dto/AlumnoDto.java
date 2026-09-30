@@ -14,6 +14,7 @@ public record AlumnoDto(
         String contactoEmergenciaNombre,
         String contactoEmergenciaTelefono,
         String fotoUrl,
+        String codigoQr,
         String observaciones,
         String estado,
         LocalDate fechaIngreso,

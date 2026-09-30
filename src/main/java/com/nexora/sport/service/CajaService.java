@@ -43,11 +43,13 @@ public class CajaService {
     private final SucursalRepository sucursalRepository;
     private final FileStorageService fileStorageService;
     private final TenantScope tenantScope;
+    private final NotificacionService notificacionService;
 
     public CajaService(CategoriaMovimientoRepository categoriaRepository, MovimientoFinancieroRepository movimientoRepository,
                         CentroRepository centroRepository, AlumnoRepository alumnoRepository,
                         ProveedorRepository proveedorRepository, SucursalRepository sucursalRepository,
-                        FileStorageService fileStorageService, TenantScope tenantScope) {
+                        FileStorageService fileStorageService, TenantScope tenantScope,
+                        NotificacionService notificacionService) {
         this.categoriaRepository = categoriaRepository;
         this.movimientoRepository = movimientoRepository;
         this.centroRepository = centroRepository;
@@ -56,6 +58,7 @@ public class CajaService {
         this.sucursalRepository = sucursalRepository;
         this.fileStorageService = fileStorageService;
         this.tenantScope = tenantScope;
+        this.notificacionService = notificacionService;
     }
 
     @Transactional
@@ -144,7 +147,11 @@ public class CajaService {
                 m.setEstadoAprobacion(EstadoAprobacion.PENDIENTE);
             }
         }
-        return toDto(movimientoRepository.save(m));
+        m = movimientoRepository.save(m);
+        if (m.getEstadoAprobacion() == EstadoAprobacion.PENDIENTE) {
+            notificacionService.notificarEgresoPendienteAprobacion(m);
+        }
+        return toDto(m);
     }
 
     private void aplicarComprobante(MovimientoFinanciero m, MultipartFile comprobante) {

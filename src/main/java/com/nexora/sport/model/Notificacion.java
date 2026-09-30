@@ -43,6 +43,22 @@ public class Notificacion {
     @JoinColumn(name = "instructor_id")
     private Instructor instructor;
 
+    /** Solo aplica a CENTRO_ADMIN: a que Seccion pertenece el evento (INVENTARIO, CLASES,
+     * MEMBRESIAS, CAJA...). Null = visible para cualquiera con acceso a NOTIFICACIONES (el
+     * comportamiento de antes); no-null = solo visible para quien ademas tenga esa Seccion
+     * en su rol (ver NotificacionService#listarBandeja). Asi Recepcion/Encargado/Dueno ven
+     * subconjuntos distintos de la misma bandeja sin necesitar un TipoDestinatario nuevo
+     * por cada rol. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "seccion_objetivo", length = 30)
+    private Seccion seccionObjetivo;
+
+    /** Solo aplica a CENTRO_ADMIN: si el evento es propio de una sucursal (ej. "nueva
+     * clase"), null = centro-wide (ej. stock, que hoy no se lleva por sucursal). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sucursal_id")
+    private Sucursal sucursal;
+
     @Column(nullable = false, length = 150)
     private String titulo;
 

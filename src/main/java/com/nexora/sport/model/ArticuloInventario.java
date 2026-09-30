@@ -29,9 +29,13 @@ public class ArticuloInventario {
     @JoinColumn(name = "centro_id", nullable = false)
     private Centro centro;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "categoria_id")
-    private CategoriaInventario categoria;
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "articulo_categorias",
+            joinColumns = @JoinColumn(name = "articulo_id"),
+            inverseJoinColumns = @JoinColumn(name = "categoria_id")
+    )
+    private Set<CategoriaInventario> categorias = new HashSet<>();
 
     @Column(nullable = false, length = 150)
     private String nombre;

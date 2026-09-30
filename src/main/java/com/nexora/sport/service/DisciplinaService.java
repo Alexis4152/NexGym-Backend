@@ -23,12 +23,14 @@ public class DisciplinaService {
     private final DisciplinaRepository disciplinaRepository;
     private final CentroRepository centroRepository;
     private final TenantScope tenantScope;
+    private final NotificacionService notificacionService;
 
     public DisciplinaService(DisciplinaRepository disciplinaRepository, CentroRepository centroRepository,
-                              TenantScope tenantScope) {
+                              TenantScope tenantScope, NotificacionService notificacionService) {
         this.disciplinaRepository = disciplinaRepository;
         this.centroRepository = centroRepository;
         this.tenantScope = tenantScope;
+        this.notificacionService = notificacionService;
     }
 
     @Transactional(readOnly = true)
@@ -55,7 +57,9 @@ public class DisciplinaService {
         Disciplina d = new Disciplina();
         d.setCentro(centroRepository.getReferenceById(centroId));
         aplicar(d, request);
-        return toDto(disciplinaRepository.save(d));
+        d = disciplinaRepository.save(d);
+        notificacionService.notificarAdminDisciplinaNueva(d);
+        return toDto(d);
     }
 
     @Transactional

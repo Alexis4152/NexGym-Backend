@@ -27,12 +27,14 @@ public class VentaService {
     private final MailService mailService;
     private final TicketPdfService ticketPdfService;
     private final EscPosTicketService escPosTicketService;
+    private final InventarioService inventarioService;
     private final TenantScope tenantScope;
 
     public VentaService(VentaRepository ventaRepository, CorteCajaRepository corteRepository,
                          ArticuloInventarioRepository articuloRepository, MovimientoInventarioRepository movimientoInventarioRepository,
                          CentroRepository centroRepository, CajaService cajaService, MailService mailService,
-                         TicketPdfService ticketPdfService, EscPosTicketService escPosTicketService, TenantScope tenantScope) {
+                         TicketPdfService ticketPdfService, EscPosTicketService escPosTicketService,
+                         InventarioService inventarioService, TenantScope tenantScope) {
         this.ventaRepository = ventaRepository;
         this.corteRepository = corteRepository;
         this.articuloRepository = articuloRepository;
@@ -42,6 +44,7 @@ public class VentaService {
         this.mailService = mailService;
         this.ticketPdfService = ticketPdfService;
         this.escPosTicketService = escPosTicketService;
+        this.inventarioService = inventarioService;
         this.tenantScope = tenantScope;
     }
 
@@ -160,6 +163,8 @@ public class VentaService {
             mov.setRazon("Venta #" + venta.getId());
             mov.setRegistradoPor(actor);
             movimientoInventarioRepository.save(mov);
+
+            inventarioService.verificarUmbralesStock(articulo, anterior);
         }
 
         venta.setMovimientoFinanciero(cajaService.registrarIngresoDeVenta(centroId, venta, actor));
@@ -262,6 +267,8 @@ public class VentaService {
             mov.setRazon("Cancelacion de venta #" + venta.getId());
             mov.setRegistradoPor(actor);
             movimientoInventarioRepository.save(mov);
+
+            inventarioService.verificarUmbralesStock(articulo, anterior);
         }
         venta.setEstado(EstadoVenta.CANCELADA);
         venta.setCanceladaPor(actor);

@@ -77,4 +77,62 @@ public final class NotificacionTemplates {
 
     public static final String ADMIN_ALUMNO_RIESGO_ABANDONO_TITULO = "Alumno en riesgo de abandono";
     public static final String ADMIN_ALUMNO_RIESGO_ABANDONO_MSG = "{{alumno}} lleva {{dias}} día(s) sin asistir.";
+
+    public static final String ADMIN_CLASE_CUPO_DISPONIBLE_TITULO = "Se liberó un lugar";
+    public static final String ADMIN_CLASE_CUPO_DISPONIBLE_MSG = "La clase de {{disciplina}} de las {{hora}} del {{fecha}} tiene un lugar disponible de nuevo.";
+
+    public static final String ADMIN_MEMBRESIA_NUEVA_TITULO = "Nueva membresía registrada";
+    public static final String ADMIN_MEMBRESIA_NUEVA_MSG = "Se registró la membresía {{plan}} para {{alumno}}.";
+
+    public static final String ADMIN_MEMBRESIA_AGOTADA_TITULO = "Membresía agotada";
+    public static final String ADMIN_MEMBRESIA_AGOTADA_MSG = "{{alumno}} ya usó todas las clases de su membresía {{plan}}.";
+
+    public static final String ADMIN_MEMBRESIA_CANCELADA_O_VENCIDA_TITULO = "Membresía cancelada o vencida";
+    public static final String ADMIN_MEMBRESIA_CANCELADA_O_VENCIDA_MSG = "La membresía {{plan}} de {{alumno}} {{motivo}}.";
+
+    public static final String ADMIN_PLAN_LLENO_TITULO = "Plan de membresía lleno";
+    public static final String ADMIN_PLAN_LLENO_MSG = "El plan {{plan}} alcanzó su límite de {{limite}} alumno(s).";
+
+    public static final String ADMIN_STOCK_BAJO_TITULO = "Stock bajo";
+    public static final String ADMIN_STOCK_BAJO_MSG = "\"{{articulo}}\" tiene stock bajo: {{stock}} unidad(es) (mínimo {{minimo}}).";
+
+    public static final String ADMIN_STOCK_AGOTADO_TITULO = "Producto agotado";
+    public static final String ADMIN_STOCK_AGOTADO_MSG = "\"{{articulo}}\" se quedó sin stock (0 unidades).";
+
+    public static final String ADMIN_STOCK_RECUPERADO_TITULO = "Producto con stock de nuevo";
+    public static final String ADMIN_STOCK_RECUPERADO_MSG = "\"{{articulo}}\" ya tiene stock disponible de nuevo: {{stock}} unidad(es).";
+
+    public static final String ADMIN_PRODUCTO_NUEVO_TITULO = "Nuevo producto agregado";
+    public static final String ADMIN_PRODUCTO_NUEVO_MSG = "Se agregó \"{{articulo}}\" al inventario.";
+
+    public static final String ADMIN_CLASE_NUEVA_TITULO = "Nueva clase agregada";
+    public static final String ADMIN_CLASE_NUEVA_MSG = "Se agregó una clase de {{disciplina}} los {{dia}} a las {{hora}} en {{sucursal}}.";
+
+    public static final String ADMIN_DISCIPLINA_NUEVA_TITULO = "Nueva disciplina agregada";
+    public static final String ADMIN_DISCIPLINA_NUEVA_MSG = "Se agregó la disciplina \"{{disciplina}}\".";
+
+    public static final String ADMIN_ALUMNO_NUEVO_TITULO = "Alumno registrado";
+    public static final String ADMIN_ALUMNO_NUEVO_MSG = "Se registró un nuevo alumno: {{alumno}}.";
+
+    public static final String EGRESO_PENDIENTE_APROBACION_TITULO = "Egreso pendiente de aprobación";
+    public static final String EGRESO_PENDIENTE_APROBACION_MSG = "{{registrador}} registró un egreso de ${{monto}} ({{categoria}}) sin comprobante. Requiere tu aprobación.";
+
+    // ---- Entrenador (destinatarioTipo=INSTRUCTOR) ----
+    public static final String INSTRUCTOR_CLASE_ASIGNADA_TITULO = "Nueva clase asignada";
+    public static final String INSTRUCTOR_CLASE_ASIGNADA_MSG = "Se te asignó la clase de {{disciplina}} los {{dia}} a las {{hora}} en {{sucursal}}.";
+
+    public static final String INSTRUCTOR_CLASE_CANCELADA_TITULO = "Clase cancelada";
+    public static final String INSTRUCTOR_CLASE_CANCELADA_MSG = "Tu clase de {{disciplina}} de las {{hora}} en {{sucursal}} fue cancelada.";
+
+    public static final String INSTRUCTOR_ALUMNO_INSCRITO_TITULO = "Nuevo alumno en tu clase";
+    public static final String INSTRUCTOR_ALUMNO_INSCRITO_MSG = "{{alumno}} se inscribió a tu clase de {{disciplina}} del {{fecha}}.";
+
+    public static final String INSTRUCTOR_ALUMNO_REMOVIDO_TITULO = "Alumno removido de tu clase";
+    public static final String INSTRUCTOR_ALUMNO_REMOVIDO_MSG = "{{alumno}} fue removido de tu clase de {{disciplina}} del {{fecha}}.";
+
+    public static final String INSTRUCTOR_DISCIPLINA_ASIGNADA_TITULO = "Nueva disciplina asignada";
+    public static final String INSTRUCTOR_DISCIPLINA_ASIGNADA_MSG = "Ahora estás asignado a la disciplina \"{{disciplina}}\".";
+
+    public static final String INSTRUCTOR_SUCURSAL_CAMBIADA_TITULO = "Cambio de sucursal";
+    public static final String INSTRUCTOR_SUCURSAL_CAMBIADA_MSG = "Tus sucursales asignadas cambiaron: {{sucursales}}.";
 }

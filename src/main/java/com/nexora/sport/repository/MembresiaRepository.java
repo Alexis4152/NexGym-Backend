@@ -90,4 +90,10 @@ public interface MembresiaRepository extends JpaRepository<Membresia, Long> {
     @Query("select m from Membresia m where m.centro.id = :centroId and m.estado = com.nexora.sport.model.EstadoMembresia.ACTIVA " +
            "and (m.plan.accesoCompleto = true or :disciplinaId in (select d.id from m.disciplinas d))")
     List<Membresia> findActivasPorDisciplina(@Param("centroId") Long centroId, @Param("disciplinaId") Long disciplinaId);
+
+    /** Cupo ocupado de un plan: ACTIVA/PENDIENTE/SUSPENDIDA cuentan (la misma nocion de
+     * "vigente" que findVigentesPorAlumnoOrdenadas); VENCIDA/CANCELADA liberan el cupo. */
+    @Query("select count(m) from Membresia m where m.plan.id = :planId and m.estado in " +
+           "(com.nexora.sport.model.EstadoMembresia.ACTIVA, com.nexora.sport.model.EstadoMembresia.PENDIENTE, com.nexora.sport.model.EstadoMembresia.SUSPENDIDA)")
+    long countVigentesPorPlan(@Param("planId") Long planId);
 }

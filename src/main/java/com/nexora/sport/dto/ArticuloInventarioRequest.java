@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 import java.util.Set;
 
 public record ArticuloInventarioRequest(
-        Long categoriaId,
+        Set<Long> categoriaIds,
         @NotBlank String nombre,
         @NotNull String tipo,
         String codigoBarras,

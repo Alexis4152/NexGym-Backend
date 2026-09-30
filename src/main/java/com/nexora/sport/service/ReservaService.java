@@ -72,6 +72,7 @@ public class ReservaService {
         reserva = reservaRepository.save(reserva);
 
         notificacionService.notificarReservaConfirmada(reserva);
+        notificacionService.notificarInstructorAlumnoInscrito(reserva);
         if (ocupadas + 1 == clase.getCapacidadMaxima()) {
             notificacionService.notificarAdminCupoLleno(clase, request.fecha());
         }
@@ -82,10 +83,20 @@ public class ReservaService {
     public ReservaDto cambiarEstado(Long id, EstadoReserva estado) {
         Reserva reserva = buscar(id);
         EstadoReserva anterior = reserva.getEstado();
+        Clase clase = reserva.getClase();
+        // Se checa ANTES de guardar el nuevo estado: si esta reserva es la que hace que
+        // ya no este llena, es porque justo antes SI estaba llena (ver misma cuenta que
+        // usa crear() para saber cuando avisar que se lleno).
+        boolean estabaLlena = reservaRepository.countByClaseIdAndFechaAndEstadoNot(
+                clase.getId(), reserva.getFecha(), EstadoReserva.CANCELADA) >= clase.getCapacidadMaxima();
         reserva.setEstado(estado);
         reserva = reservaRepository.save(reserva);
         if (estado == EstadoReserva.CANCELADA && anterior != EstadoReserva.CANCELADA) {
             notificacionService.notificarReservaCancelada(reserva);
+            notificacionService.notificarInstructorAlumnoRemovido(reserva);
+            if (estabaLlena) {
+                notificacionService.notificarAdminCupoDisponible(clase, reserva.getFecha());
+            }
         }
         return toDto(reserva);
     }

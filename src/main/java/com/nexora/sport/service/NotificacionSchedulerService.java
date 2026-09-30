@@ -92,8 +92,10 @@ public class NotificacionSchedulerService {
         }
 
         // "Membresia vencida": una sola vez, el dia siguiente a fecha_fin (ya la marco VENCIDA MembresiaExpiryJob a las 00:05).
-        membresiaRepository.findVencidasEnFecha(centro.getId(), hoy.minusDays(1))
-                .forEach(notificacionService::notificarMembresiaVencida);
+        membresiaRepository.findVencidasEnFecha(centro.getId(), hoy.minusDays(1)).forEach(m -> {
+            notificacionService.notificarMembresiaVencida(m);
+            notificacionService.notificarAdminMembresiaCanceladaOVencida(m, "venció");
+        });
 
         // Resumenes administrativos (solo canal interno, seccion 16).
         long vencenEstaSemana = membresiaRepository.countActivasFechaFinEntre(centro.getId(), hoy, hoy.plusDays(7));

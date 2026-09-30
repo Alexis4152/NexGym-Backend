@@ -4,6 +4,7 @@ import com.nexora.sport.dto.NotificacionDto;
 import com.nexora.sport.dto.PageResponse;
 import com.nexora.sport.exception.ResourceNotFoundException;
 import com.nexora.sport.model.*;
+import com.nexora.sport.repository.InstructorRepository;
 import com.nexora.sport.repository.NotificacionEnvioRepository;
 import com.nexora.sport.repository.NotificacionRepository;
 import com.nexora.sport.security.TenantScope;
@@ -19,6 +20,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static com.nexora.sport.service.NotificacionTemplates.*;
 
@@ -39,14 +41,17 @@ public class NotificacionService {
     private final NotificacionRepository notificacionRepository;
     private final NotificacionEnvioRepository notificacionEnvioRepository;
     private final NotificacionEmailDispatcher emailDispatcher;
+    private final InstructorRepository instructorRepository;
     private final TenantScope tenantScope;
 
     public NotificacionService(NotificacionRepository notificacionRepository,
                                 NotificacionEnvioRepository notificacionEnvioRepository,
-                                NotificacionEmailDispatcher emailDispatcher, TenantScope tenantScope) {
+                                NotificacionEmailDispatcher emailDispatcher, InstructorRepository instructorRepository,
+                                TenantScope tenantScope) {
         this.notificacionRepository = notificacionRepository;
         this.notificacionEnvioRepository = notificacionEnvioRepository;
         this.emailDispatcher = emailDispatcher;
+        this.instructorRepository = instructorRepository;
         this.tenantScope = tenantScope;
     }
 
@@ -54,9 +59,21 @@ public class NotificacionService {
     // Nucleo: crear + despachar. No propaga excepciones (seccion 24).
     // =====================================================================
 
+    /** Compatibilidad: la mayoria de los notificarXxx existentes (ALUMNO) no necesitan
+     * seccionObjetivo/sucursal -- ver el overload de abajo para CENTRO_ADMIN segmentado. */
     @Transactional
     public void crear(Centro centro, TipoNotificacion tipo, TipoDestinatario destinatarioTipo,
                        Alumno alumno, Instructor instructor, String titulo, String mensaje,
+                       String entidadTipo, Long entidadId, String dedupeKey,
+                       boolean categoriaActiva, String emailDestino) {
+        crear(centro, tipo, destinatarioTipo, alumno, instructor, null, null, titulo, mensaje,
+                entidadTipo, entidadId, dedupeKey, categoriaActiva, emailDestino);
+    }
+
+    @Transactional
+    public void crear(Centro centro, TipoNotificacion tipo, TipoDestinatario destinatarioTipo,
+                       Alumno alumno, Instructor instructor, Seccion seccionObjetivo, Sucursal sucursal,
+                       String titulo, String mensaje,
                        String entidadTipo, Long entidadId, String dedupeKey,
                        boolean categoriaActiva, String emailDestino) {
         try {
@@ -69,6 +86,8 @@ public class NotificacionService {
             n.setDestinatarioTipo(destinatarioTipo);
             n.setAlumno(alumno);
             n.setInstructor(instructor);
+            n.setSeccionObjetivo(seccionObjetivo);
+            n.setSucursal(sucursal);
             n.setTitulo(titulo);
             n.setMensaje(mensaje);
             n.setEntidadTipo(entidadTipo);
@@ -286,6 +305,7 @@ public class NotificacionService {
         if (cantidad <= 0) return;
         Map<String, String> v = mapOf("cantidad", String.valueOf(cantidad));
         crear(centro, TipoNotificacion.ADMIN_MEMBRESIAS_POR_VENCER, TipoDestinatario.CENTRO_ADMIN, null, null,
+                Seccion.MEMBRESIAS, null,
                 ADMIN_MEMBRESIAS_POR_VENCER_TITULO, render(ADMIN_MEMBRESIAS_POR_VENCER_MSG, v),
                 "CENTRO", centro.getId(), "ADMIN_MEMB_SEMANA:" + centro.getId() + ":" + hoy,
                 centro.isNotificacionesMembresiaActivo(), null);
@@ -295,6 +315,7 @@ public class NotificacionService {
         if (cantidad <= 0) return;
         Map<String, String> v = mapOf("cantidad", String.valueOf(cantidad));
         crear(centro, TipoNotificacion.ADMIN_ALUMNOS_SALDO_PENDIENTE, TipoDestinatario.CENTRO_ADMIN, null, null,
+                Seccion.MEMBRESIAS, null,
                 ADMIN_ALUMNOS_SALDO_PENDIENTE_TITULO, render(ADMIN_ALUMNOS_SALDO_PENDIENTE_MSG, v),
                 "CENTRO", centro.getId(), "ADMIN_SALDO:" + centro.getId() + ":" + hoy,
                 centro.isNotificacionesMembresiaActivo(), null);
@@ -303,6 +324,7 @@ public class NotificacionService {
     public void notificarAdminRiesgoAbandono(Centro centro, Alumno alumno, long diasSinAsistir, LocalDate hoy) {
         Map<String, String> v = mapOf("alumno", alumno.getNombre(), "dias", String.valueOf(diasSinAsistir));
         crear(centro, TipoNotificacion.ADMIN_ALUMNO_RIESGO_ABANDONO, TipoDestinatario.CENTRO_ADMIN, alumno, null,
+                Seccion.ALUMNOS, null,
                 ADMIN_ALUMNO_RIESGO_ABANDONO_TITULO, render(ADMIN_ALUMNO_RIESGO_ABANDONO_MSG, v),
                 "ALUMNO", alumno.getId(), "ADMIN_RIESGO:" + alumno.getId() + ":" + hoy,
                 centro.isNotificacionesMembresiaActivo(), null);
@@ -313,30 +335,260 @@ public class NotificacionService {
         Map<String, String> v = mapOf("disciplina", c.getDisciplina().getNombre(), "hora", String.valueOf(c.getHoraInicio()),
                 "fecha", String.valueOf(fecha), "capacidad", String.valueOf(c.getCapacidadMaxima()));
         crear(centro, TipoNotificacion.ADMIN_CLASE_CUPO_LLENO, TipoDestinatario.CENTRO_ADMIN, null, null,
+                Seccion.CLASES, c.getSucursal(),
                 ADMIN_CLASE_CUPO_LLENO_TITULO, render(ADMIN_CLASE_CUPO_LLENO_MSG, v),
                 "CLASE", c.getId(), "ADMIN_CUPO:" + c.getId() + ":" + fecha,
                 centro.isNotificacionesClaseActivo(), null);
+    }
+
+    public void notificarAdminCupoDisponible(Clase c, LocalDate fecha) {
+        Centro centro = c.getCentro();
+        Map<String, String> v = mapOf("disciplina", c.getDisciplina().getNombre(), "hora", String.valueOf(c.getHoraInicio()),
+                "fecha", String.valueOf(fecha));
+        crear(centro, TipoNotificacion.ADMIN_CLASE_CUPO_DISPONIBLE, TipoDestinatario.CENTRO_ADMIN, null, null,
+                Seccion.CLASES, c.getSucursal(),
+                ADMIN_CLASE_CUPO_DISPONIBLE_TITULO, render(ADMIN_CLASE_CUPO_DISPONIBLE_MSG, v),
+                "CLASE", c.getId(), "ADMIN_CUPO_LIBRE:" + c.getId() + ":" + fecha,
+                centro.isNotificacionesClaseActivo(), null);
+    }
+
+    public void notificarAdminMembresiaNueva(Membresia m) {
+        Centro centro = m.getCentro();
+        Map<String, String> v = mapOf("plan", m.getPlanNombreSnapshot(), "alumno", m.getAlumno().getNombre());
+        crear(centro, TipoNotificacion.ADMIN_MEMBRESIA_NUEVA, TipoDestinatario.CENTRO_ADMIN, m.getAlumno(), null,
+                Seccion.MEMBRESIAS, null,
+                ADMIN_MEMBRESIA_NUEVA_TITULO, render(ADMIN_MEMBRESIA_NUEVA_MSG, v),
+                "MEMBRESIA", m.getId(), "ADMIN_MEMB_NUEVA:" + m.getId(),
+                centro.isNotificacionesMembresiaActivo(), null);
+    }
+
+    public void notificarAdminMembresiaAgotada(Membresia m) {
+        Centro centro = m.getCentro();
+        Map<String, String> v = mapOf("plan", m.getPlanNombreSnapshot(), "alumno", m.getAlumno().getNombre());
+        crear(centro, TipoNotificacion.ADMIN_MEMBRESIA_AGOTADA, TipoDestinatario.CENTRO_ADMIN, m.getAlumno(), null,
+                Seccion.MEMBRESIAS, null,
+                ADMIN_MEMBRESIA_AGOTADA_TITULO, render(ADMIN_MEMBRESIA_AGOTADA_MSG, v),
+                "MEMBRESIA", m.getId(), "ADMIN_MEMB_AGOTADA:" + m.getId(),
+                centro.isNotificacionesMembresiaActivo(), null);
+    }
+
+    public void notificarAdminMembresiaCanceladaOVencida(Membresia m, String motivo) {
+        Centro centro = m.getCentro();
+        Map<String, String> v = mapOf("plan", m.getPlanNombreSnapshot(), "alumno", m.getAlumno().getNombre(), "motivo", motivo);
+        crear(centro, TipoNotificacion.ADMIN_MEMBRESIA_CANCELADA_O_VENCIDA, TipoDestinatario.CENTRO_ADMIN, m.getAlumno(), null,
+                Seccion.MEMBRESIAS, null,
+                ADMIN_MEMBRESIA_CANCELADA_O_VENCIDA_TITULO, render(ADMIN_MEMBRESIA_CANCELADA_O_VENCIDA_MSG, v),
+                "MEMBRESIA", m.getId(), "ADMIN_MEMB_FIN:" + m.getId() + ":" + motivo,
+                centro.isNotificacionesMembresiaActivo(), null);
+    }
+
+    public void notificarAdminPlanLleno(MembresiaPlan plan) {
+        Centro centro = plan.getCentro();
+        Map<String, String> v = mapOf("plan", plan.getNombre(), "limite", String.valueOf(plan.getLimiteAlumnos()));
+        crear(centro, TipoNotificacion.ADMIN_PLAN_LLENO, TipoDestinatario.CENTRO_ADMIN, null, null,
+                Seccion.MEMBRESIAS, null,
+                ADMIN_PLAN_LLENO_TITULO, render(ADMIN_PLAN_LLENO_MSG, v),
+                "PLAN", plan.getId(), "ADMIN_PLAN_LLENO:" + plan.getId(),
+                centro.isNotificacionesMembresiaActivo(), null);
+    }
+
+    public void notificarAdminStockBajo(ArticuloInventario a) {
+        Centro centro = a.getCentro();
+        Map<String, String> v = mapOf("articulo", a.getNombre(), "stock", String.valueOf(a.getStock()), "minimo", String.valueOf(a.getStockMinimo()));
+        crear(centro, TipoNotificacion.ADMIN_STOCK_BAJO, TipoDestinatario.CENTRO_ADMIN, null, null,
+                Seccion.INVENTARIO, null,
+                ADMIN_STOCK_BAJO_TITULO, render(ADMIN_STOCK_BAJO_MSG, v),
+                "ARTICULO", a.getId(), null,
+                centro.isNotificacionesInventarioActivo(), null);
+    }
+
+    public void notificarAdminStockAgotado(ArticuloInventario a) {
+        Centro centro = a.getCentro();
+        Map<String, String> v = mapOf("articulo", a.getNombre());
+        crear(centro, TipoNotificacion.ADMIN_STOCK_AGOTADO, TipoDestinatario.CENTRO_ADMIN, null, null,
+                Seccion.INVENTARIO, null,
+                ADMIN_STOCK_AGOTADO_TITULO, render(ADMIN_STOCK_AGOTADO_MSG, v),
+                "ARTICULO", a.getId(), null,
+                centro.isNotificacionesInventarioActivo(), null);
+    }
+
+    public void notificarAdminStockRecuperado(ArticuloInventario a) {
+        Centro centro = a.getCentro();
+        Map<String, String> v = mapOf("articulo", a.getNombre(), "stock", String.valueOf(a.getStock()));
+        crear(centro, TipoNotificacion.ADMIN_STOCK_RECUPERADO, TipoDestinatario.CENTRO_ADMIN, null, null,
+                Seccion.INVENTARIO, null,
+                ADMIN_STOCK_RECUPERADO_TITULO, render(ADMIN_STOCK_RECUPERADO_MSG, v),
+                "ARTICULO", a.getId(), null,
+                centro.isNotificacionesInventarioActivo(), null);
+    }
+
+    public void notificarAdminProductoNuevo(ArticuloInventario a) {
+        Centro centro = a.getCentro();
+        Map<String, String> v = mapOf("articulo", a.getNombre());
+        crear(centro, TipoNotificacion.ADMIN_PRODUCTO_NUEVO, TipoDestinatario.CENTRO_ADMIN, null, null,
+                Seccion.INVENTARIO, null,
+                ADMIN_PRODUCTO_NUEVO_TITULO, render(ADMIN_PRODUCTO_NUEVO_MSG, v),
+                "ARTICULO", a.getId(), "ADMIN_PRODUCTO_NUEVO:" + a.getId(),
+                centro.isNotificacionesInventarioActivo(), null);
+    }
+
+    public void notificarAdminClaseNueva(Clase c) {
+        Centro centro = c.getCentro();
+        Map<String, String> v = mapOf("disciplina", c.getDisciplina().getNombre(), "dia", String.valueOf(c.getDiaSemana()),
+                "hora", String.valueOf(c.getHoraInicio()), "sucursal", c.getSucursal().getNombre());
+        crear(centro, TipoNotificacion.ADMIN_CLASE_NUEVA, TipoDestinatario.CENTRO_ADMIN, null, null,
+                Seccion.CLASES, c.getSucursal(),
+                ADMIN_CLASE_NUEVA_TITULO, render(ADMIN_CLASE_NUEVA_MSG, v),
+                "CLASE", c.getId(), "ADMIN_CLASE_NUEVA:" + c.getId(),
+                centro.isNotificacionesClaseActivo(), null);
+    }
+
+    public void notificarAdminDisciplinaNueva(Disciplina d) {
+        Centro centro = d.getCentro();
+        Map<String, String> v = mapOf("disciplina", d.getNombre());
+        crear(centro, TipoNotificacion.ADMIN_DISCIPLINA_NUEVA, TipoDestinatario.CENTRO_ADMIN, null, null,
+                Seccion.DISCIPLINAS, null,
+                ADMIN_DISCIPLINA_NUEVA_TITULO, render(ADMIN_DISCIPLINA_NUEVA_MSG, v),
+                "DISCIPLINA", d.getId(), "ADMIN_DISC_NUEVA:" + d.getId(),
+                centro.isNotificacionesClaseActivo(), null);
+    }
+
+    public void notificarAdminAlumnoNuevo(Alumno a) {
+        Centro centro = a.getCentro();
+        Map<String, String> v = mapOf("alumno", a.getNombre());
+        crear(centro, TipoNotificacion.ADMIN_ALUMNO_NUEVO, TipoDestinatario.CENTRO_ADMIN, a, null,
+                Seccion.ALUMNOS, null,
+                ADMIN_ALUMNO_NUEVO_TITULO, render(ADMIN_ALUMNO_NUEVO_MSG, v),
+                "ALUMNO", a.getId(), "ADMIN_ALUMNO_NUEVO:" + a.getId(),
+                centro.isNotificacionesMembresiaActivo(), null);
+    }
+
+    /** Solo la ve Dueno/Encargado (ver Notificacion#seccionObjetivo=CAJA + TipoNotificacion
+     * .EGRESO_PENDIENTE_APROBACION exigiendo ademas isAdminOSuperior en listarBandeja). */
+    public void notificarEgresoPendienteAprobacion(MovimientoFinanciero mov) {
+        Centro centro = mov.getCentro();
+        Map<String, String> v = mapOf("registrador", mov.getRegistradoPor() != null ? mov.getRegistradoPor().getNombre() : "alguien",
+                "monto", mov.getMonto().setScale(2, java.math.RoundingMode.HALF_UP).toString(),
+                "categoria", mov.getCategoria().getNombre());
+        crear(centro, TipoNotificacion.EGRESO_PENDIENTE_APROBACION, TipoDestinatario.CENTRO_ADMIN, null, null,
+                Seccion.CAJA, mov.getSucursal(),
+                EGRESO_PENDIENTE_APROBACION_TITULO, render(EGRESO_PENDIENTE_APROBACION_MSG, v),
+                "MOVIMIENTO", mov.getId(), "EGRESO_PENDIENTE:" + mov.getId(),
+                true, null);
+    }
+
+    // =====================================================================
+    // Entrenador (destinatarioTipo=INSTRUCTOR): email a Instructor.email siempre; ademas
+    // bandeja en-app si Instructor.usuario esta ligado (ver listarBandeja/miInstructorId).
+    // =====================================================================
+
+    public void notificarInstructorClaseAsignada(Clase c) {
+        if (c.getInstructor() == null) return;
+        Instructor instr = c.getInstructor();
+        Centro centro = c.getCentro();
+        Map<String, String> v = mapOf("disciplina", c.getDisciplina().getNombre(), "dia", String.valueOf(c.getDiaSemana()),
+                "hora", String.valueOf(c.getHoraInicio()), "sucursal", c.getSucursal().getNombre());
+        crear(centro, TipoNotificacion.INSTRUCTOR_CLASE_ASIGNADA, TipoDestinatario.INSTRUCTOR, null, instr,
+                INSTRUCTOR_CLASE_ASIGNADA_TITULO, render(INSTRUCTOR_CLASE_ASIGNADA_MSG, v),
+                "CLASE", c.getId(), null,
+                centro.isNotificacionesClaseActivo(), instr.getEmail());
+    }
+
+    public void notificarInstructorClaseCancelada(Clase c) {
+        if (c.getInstructor() == null) return;
+        Instructor instr = c.getInstructor();
+        Centro centro = c.getCentro();
+        Map<String, String> v = mapOf("disciplina", c.getDisciplina().getNombre(), "hora", String.valueOf(c.getHoraInicio()),
+                "sucursal", c.getSucursal().getNombre());
+        crear(centro, TipoNotificacion.INSTRUCTOR_CLASE_CANCELADA, TipoDestinatario.INSTRUCTOR, null, instr,
+                INSTRUCTOR_CLASE_CANCELADA_TITULO, render(INSTRUCTOR_CLASE_CANCELADA_MSG, v),
+                "CLASE", c.getId(), "INSTR_CLASE_CANCELADA:" + c.getId(),
+                centro.isNotificacionesClaseActivo(), instr.getEmail());
+    }
+
+    public void notificarInstructorAlumnoInscrito(Reserva r) {
+        Clase c = r.getClase();
+        if (c.getInstructor() == null) return;
+        Instructor instr = c.getInstructor();
+        Centro centro = r.getCentro();
+        Map<String, String> v = mapOf("alumno", r.getAlumno().getNombre(), "disciplina", c.getDisciplina().getNombre(),
+                "fecha", String.valueOf(r.getFecha()));
+        crear(centro, TipoNotificacion.INSTRUCTOR_ALUMNO_INSCRITO, TipoDestinatario.INSTRUCTOR, r.getAlumno(), instr,
+                INSTRUCTOR_ALUMNO_INSCRITO_TITULO, render(INSTRUCTOR_ALUMNO_INSCRITO_MSG, v),
+                "RESERVA", r.getId(), "INSTR_ALUMNO_IN:" + r.getId(),
+                centro.isNotificacionesClaseActivo(), instr.getEmail());
+    }
+
+    public void notificarInstructorAlumnoRemovido(Reserva r) {
+        Clase c = r.getClase();
+        if (c.getInstructor() == null) return;
+        Instructor instr = c.getInstructor();
+        Centro centro = r.getCentro();
+        Map<String, String> v = mapOf("alumno", r.getAlumno().getNombre(), "disciplina", c.getDisciplina().getNombre(),
+                "fecha", String.valueOf(r.getFecha()));
+        crear(centro, TipoNotificacion.INSTRUCTOR_ALUMNO_REMOVIDO, TipoDestinatario.INSTRUCTOR, r.getAlumno(), instr,
+                INSTRUCTOR_ALUMNO_REMOVIDO_TITULO, render(INSTRUCTOR_ALUMNO_REMOVIDO_MSG, v),
+                "RESERVA", r.getId(), "INSTR_ALUMNO_OUT:" + r.getId(),
+                centro.isNotificacionesClaseActivo(), instr.getEmail());
+    }
+
+    public void notificarInstructorDisciplinaAsignada(Instructor instr, Disciplina d) {
+        Centro centro = instr.getCentro();
+        Map<String, String> v = mapOf("disciplina", d.getNombre());
+        crear(centro, TipoNotificacion.INSTRUCTOR_DISCIPLINA_ASIGNADA, TipoDestinatario.INSTRUCTOR, null, instr,
+                INSTRUCTOR_DISCIPLINA_ASIGNADA_TITULO, render(INSTRUCTOR_DISCIPLINA_ASIGNADA_MSG, v),
+                "INSTRUCTOR", instr.getId(), null,
+                true, instr.getEmail());
+    }
+
+    public void notificarInstructorSucursalCambiada(Instructor instr, String sucursalesTexto) {
+        Centro centro = instr.getCentro();
+        Map<String, String> v = mapOf("sucursales", sucursalesTexto);
+        crear(centro, TipoNotificacion.INSTRUCTOR_SUCURSAL_CAMBIADA, TipoDestinatario.INSTRUCTOR, null, instr,
+                INSTRUCTOR_SUCURSAL_CAMBIADA_TITULO, render(INSTRUCTOR_SUCURSAL_CAMBIADA_MSG, v),
+                "INSTRUCTOR", instr.getId(), null,
+                true, instr.getEmail());
     }
 
     // =====================================================================
     // Consultas para el controller (bandeja/campana)
     // =====================================================================
 
+    /** Solo bloquea el bloque CENTRO_ADMIN completo si el actor es un Entrenador "puro"
+     * (nivel OPERATIVO sin CAJA ni INVENTARIO en su rol): comparte Seccion.CLASES/ALUMNOS
+     * con Recepcion pero no debe ver esos avisos generales, solo los suyos (INSTRUCTOR). */
+    private boolean esPersonalOperativo(Usuario actor) {
+        if (tenantScope.isAdminOSuperior(actor)) return true;
+        Set<Seccion> secciones = actor.getRol().getSecciones();
+        return secciones.contains(Seccion.CAJA) || secciones.contains(Seccion.INVENTARIO);
+    }
+
+    private Long miInstructorId(Usuario actor) {
+        return instructorRepository.findByUsuarioId(actor.getId()).map(Instructor::getId).orElse(null);
+    }
+
     @Transactional(readOnly = true)
     public PageResponse<NotificacionDto> listarBandeja(Usuario actor, boolean soloNoLeidas, Pageable pageable) {
         Long centroId = tenantScope.scopeId(actor);
-        var page = soloNoLeidas
-                ? notificacionRepository.findByCentroIdAndDestinatarioTipoAndInternoVisibleTrueAndLeidaFalseOrderByCreatedAtDesc(
-                        centroId, TipoDestinatario.CENTRO_ADMIN, pageable)
-                : notificacionRepository.findByCentroIdAndDestinatarioTipoAndInternoVisibleTrueOrderByCreatedAtDesc(
-                        centroId, TipoDestinatario.CENTRO_ADMIN, pageable);
+        Set<Seccion> secciones = actor.getRol().getSecciones();
+        Set<Long> sucursalIds = tenantScope.sucursalesPermitidas(actor);
+        boolean puedeAprobar = tenantScope.isAdminOSuperior(actor);
+        boolean esOperativo = esPersonalOperativo(actor);
+        Long miInstructorId = miInstructorId(actor);
+        var page = notificacionRepository.buscarBandeja(centroId, secciones, sucursalIds, puedeAprobar, esOperativo,
+                miInstructorId, soloNoLeidas, pageable);
         return PageResponse.of(page, this::toDto);
     }
 
     @Transactional(readOnly = true)
     public long contarNoLeidas(Usuario actor) {
-        return notificacionRepository.countByCentroIdAndDestinatarioTipoAndInternoVisibleTrueAndLeidaFalse(
-                tenantScope.scopeId(actor), TipoDestinatario.CENTRO_ADMIN);
+        Long centroId = tenantScope.scopeId(actor);
+        Set<Seccion> secciones = actor.getRol().getSecciones();
+        Set<Long> sucursalIds = tenantScope.sucursalesPermitidas(actor);
+        boolean puedeAprobar = tenantScope.isAdminOSuperior(actor);
+        boolean esOperativo = esPersonalOperativo(actor);
+        Long miInstructorId = miInstructorId(actor);
+        return notificacionRepository.contarNoLeidasBandeja(centroId, secciones, sucursalIds, puedeAprobar, esOperativo, miInstructorId);
     }
 
     @Transactional
@@ -355,7 +607,13 @@ public class NotificacionService {
 
     @Transactional
     public void marcarTodasLeidas(Usuario actor) {
-        notificacionRepository.marcarTodasLeidas(tenantScope.scopeId(actor), TipoDestinatario.CENTRO_ADMIN, LocalDateTime.now());
+        Long centroId = tenantScope.scopeId(actor);
+        Set<Seccion> secciones = actor.getRol().getSecciones();
+        Set<Long> sucursalIds = tenantScope.sucursalesPermitidas(actor);
+        boolean puedeAprobar = tenantScope.isAdminOSuperior(actor);
+        boolean esOperativo = esPersonalOperativo(actor);
+        Long miInstructorId = miInstructorId(actor);
+        notificacionRepository.marcarTodasLeidas(centroId, secciones, sucursalIds, puedeAprobar, esOperativo, miInstructorId, LocalDateTime.now());
     }
 
     @Transactional(readOnly = true)

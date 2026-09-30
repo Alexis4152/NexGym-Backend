@@ -18,6 +18,9 @@ public class ImagenArticuloService {
 
     private static final Set<String> TIPOS_PERMITIDOS = Set.of("image/png", "image/jpeg", "image/webp");
     private static final long TAMANIO_MAXIMO = 5L * 1024 * 1024; // 5MB
+    /** Tope para que el catalogo/apartados publico (siempre las mismas 3) tenga un
+     * layout predecible -- ver PublicCatalogService#imagenesDe. */
+    private static final int MAXIMO_FOTOS_POR_ARTICULO = 3;
 
     private final ImagenArticuloRepository imagenRepository;
     private final FileStorageService fileStorageService;
@@ -40,12 +43,15 @@ public class ImagenArticuloService {
 
     @Transactional
     public ImagenArticuloDto subir(ArticuloInventario articulo, MultipartFile file) {
+        long existentes = imagenRepository.countByArticuloId(articulo.getId());
+        if (existentes >= MAXIMO_FOTOS_POR_ARTICULO) {
+            throw new IllegalArgumentException("Maximo " + MAXIMO_FOTOS_POR_ARTICULO + " fotos por articulo");
+        }
         String ruta = fileStorageService.guardar("articulos", articulo.getId(), file, TIPOS_PERMITIDOS, TAMANIO_MAXIMO);
 
         ImagenArticulo imagen = new ImagenArticulo();
         imagen.setArticulo(articulo);
         imagen.setRuta(ruta);
-        long existentes = imagenRepository.countByArticuloId(articulo.getId());
         imagen.setEsPrincipal(existentes == 0);
         imagen.setOrden((int) existentes);
         return toDto(imagenRepository.save(imagen));

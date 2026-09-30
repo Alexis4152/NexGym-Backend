@@ -18,6 +18,8 @@ public interface AlumnoRepository extends JpaRepository<Alumno, Long> {
     Page<Alumno> findByCentroIdAndDeletedAtIsNullAndNombreContainingIgnoreCase(
             Long centroId, String nombre, Pageable pageable);
 
+    java.util.Optional<Alumno> findByCodigoQrAndDeletedAtIsNull(String codigoQr);
+
     long countByCentroIdAndEstadoAndDeletedAtIsNull(Long centroId, EstadoAlumno estado);
 
     long countByCentroIdAndDeletedAtIsNull(Long centroId);

@@ -5,6 +5,7 @@ import com.nexora.sport.dto.publico.PublicArticuloDto;
 import com.nexora.sport.dto.publico.PublicCentroDto;
 import com.nexora.sport.exception.ResourceNotFoundException;
 import com.nexora.sport.model.ArticuloInventario;
+import com.nexora.sport.model.CategoriaInventario;
 import com.nexora.sport.model.Centro;
 import com.nexora.sport.model.ImagenArticulo;
 import com.nexora.sport.repository.ArticuloInventarioRepository;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /** Catalogo publico sin login, aislado por slug (mismo patron que "Apartados" en DemoPV). */
 @Service
@@ -42,10 +44,12 @@ public class PublicCatalogService {
     public List<PublicArticuloDto> listarProductos(String slug) {
         Centro centro = resolverCentro(slug);
         return articuloRepository.findByCentroIdAndVendibleTrueAndActivoTrueAndDeletedAtIsNull(centro.getId()).stream()
-                .map(a -> new PublicArticuloDto(
-                        a.getId(), a.getNombre(),
-                        a.getCategoria() != null ? a.getCategoria().getNombre() : null,
-                        a.getPrecioVenta(), imagenPrincipal(a)))
+                .map(a -> {
+                    List<String> imagenes = imagenesDe(a);
+                    return new PublicArticuloDto(
+                            a.getId(), a.getNombre(), nombresCategorias(a),
+                            a.getPrecioVenta(), imagenPrincipal(a, imagenes), imagenes);
+                })
                 .toList();
     }
 
@@ -60,16 +64,33 @@ public class PublicCatalogService {
                     BigDecimal precioConDescuento = descuentoPct != null
                             ? precio.subtract(precio.multiply(descuentoPct).divide(BigDecimal.valueOf(100)))
                             : precio;
+                    List<String> imagenes = imagenesDe(a);
                     return new PublicArticuloApartadoDto(
-                            a.getId(), a.getNombre(), a.getCategoria() != null ? a.getCategoria().getNombre() : null,
-                            precio, descuentoPct, precioConDescuento, imagenPrincipal(a), a.getStock());
+                            a.getId(), a.getNombre(), nombresCategorias(a),
+                            precio, descuentoPct, precioConDescuento, imagenPrincipal(a, imagenes), imagenes, a.getStock());
                 })
                 .toList();
     }
 
-    private String imagenPrincipal(ArticuloInventario a) {
-        return imagenArticuloRepository.findFirstByArticuloIdAndEsPrincipalTrue(a.getId())
-                .map(ImagenArticulo::getRuta).orElse(a.getImagenUrl());
+    private String nombresCategorias(ArticuloInventario a) {
+        return a.getCategorias().isEmpty() ? null
+                : a.getCategorias().stream().map(CategoriaInventario::getNombre).collect(Collectors.joining(", "));
+    }
+
+    /** Hasta 3 fotos (ver ImagenArticuloService, tope de 3 al subir): la portada
+     * (esPrincipal) siempre primero -- puede no coincidir con "orden" si se cambio de
+     * portada despues de subir varias -- seguida del resto en su orden. */
+    private List<String> imagenesDe(ArticuloInventario a) {
+        List<ImagenArticulo> todas = imagenArticuloRepository.findByArticuloIdOrderByOrdenAsc(a.getId());
+        List<String> ordenadas = new java.util.ArrayList<>();
+        todas.stream().filter(ImagenArticulo::isEsPrincipal).findFirst()
+                .ifPresent(p -> ordenadas.add(p.getRuta()));
+        todas.stream().filter(img -> !img.isEsPrincipal()).forEach(img -> ordenadas.add(img.getRuta()));
+        return ordenadas.stream().limit(3).toList();
+    }
+
+    private String imagenPrincipal(ArticuloInventario a, List<String> imagenes) {
+        return !imagenes.isEmpty() ? imagenes.get(0) : a.getImagenUrl();
     }
 
     private Centro resolverCentro(String slug) {

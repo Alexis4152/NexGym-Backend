@@ -80,6 +80,13 @@ public class Centro {
     @Column(name = "notificaciones_clase_activo", nullable = false)
     private boolean notificacionesClaseActivo = true;
 
+    /** Stock bajo/agotado/recuperado y productos nuevos. columnDefinition con DEFAULT:
+     * a diferencia de los demas flags de notificaciones (que nacieron con la tabla),
+     * este se agrega a un Centro que ya puede tener filas -- sin el DEFAULT a nivel SQL,
+     * el ALTER TABLE ... NOT NULL fallaria contra filas existentes. */
+    @Column(name = "notificaciones_inventario_activo", nullable = false, columnDefinition = "boolean not null default true")
+    private boolean notificacionesInventarioActivo = true;
+
     @Column(name = "notificaciones_email_activo", nullable = false)
     private boolean notificacionesEmailActivo = true;
 

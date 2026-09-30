@@ -34,6 +34,9 @@ public class AuthService {
     @Value("${app.jwt.refresh-token-expiration-hours}")
     private long refreshHours;
 
+    @Value("${app.frontend.url}")
+    private String frontendUrl;
+
     public AuthService(AuthenticationManager authenticationManager, UsuarioRepository usuarioRepository,
                         RefreshTokenRepository refreshTokenRepository,
                         PasswordResetTokenRepository passwordResetTokenRepository,
@@ -100,8 +103,17 @@ public class AuthService {
             token.setToken(PasswordGenerator.generateToken());
             token.setExpiresAt(LocalDateTime.now().plusMinutes(30));
             passwordResetTokenRepository.save(token);
-            mailService.send(usuario.getEmail(), "Recupera tu contrasena - NexoraSport",
-                    "Usa este codigo para restablecer tu contrasena (valido 30 minutos):\n\n" + token.getToken());
+            // Con acentos reales (a diferencia del resto de textos internos de la app):
+            // un cuerpo sin ningun acento en español es lo bastante corto y ambiguo para
+            // que el detector de idioma de Gmail lo confunda con ingles ("Parece que este
+            // mensaje esta en ingles"), como le paso a un usuario real con este correo.
+            String enlace = frontendUrl + "/reset-password?token=" + token.getToken();
+            String cuerpo = "Recibimos una solicitud para restablecer tu contraseña en NexoraSport.\n\n" +
+                    "Da clic en este enlace para continuar (válido 30 minutos):\n" + enlace + "\n\n" +
+                    "Si el enlace no abre, entra a " + frontendUrl + "/reset-password y pega ahí este código:\n" +
+                    token.getToken() + "\n\n" +
+                    "Si tú no solicitaste este cambio, ignora este correo; tu contraseña sigue igual.";
+            mailService.send(usuario.getEmail(), "Recupera tu contraseña - NexoraSport", cuerpo);
         });
         // Respuesta generica sin importar si el correo existe, para no filtrar informacion.
     }

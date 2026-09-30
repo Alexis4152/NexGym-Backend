@@ -37,6 +37,19 @@ public class AlumnoController {
         return ApiResponse.ok(alumnoService.obtener(actor, id));
     }
 
+    /** Para Asistencia/POS/formularios de busqueda: un lector de QR "escribe" el token
+     * en el campo enfocado + Enter, igual que un lector de codigo de barras. */
+    @GetMapping("/por-qr/{codigoQr}")
+    public ApiResponse<AlumnoDto> buscarPorQr(@AuthenticationPrincipal Usuario actor, @PathVariable String codigoQr) {
+        return ApiResponse.ok(alumnoService.buscarPorQr(actor, codigoQr));
+    }
+
+    @PostMapping("/{id}/regenerar-qr")
+    @PreAuthorize("@sectionAccess.check('ALUMNOS') and @permisoAccess.check('ALUMNOS_EDITAR')")
+    public ApiResponse<AlumnoDto> regenerarQr(@AuthenticationPrincipal Usuario actor, @PathVariable Long id) {
+        return ApiResponse.ok("QR regenerado", alumnoService.regenerarQr(actor, id));
+    }
+
     @PostMapping
     @PreAuthorize("@sectionAccess.check('ALUMNOS') and @permisoAccess.check('ALUMNOS_CREAR')")
     public ApiResponse<AlumnoDto> crear(@AuthenticationPrincipal Usuario actor, @Valid @RequestBody AlumnoRequest request) {

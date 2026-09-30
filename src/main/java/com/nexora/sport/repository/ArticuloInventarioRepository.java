@@ -21,9 +21,9 @@ public interface ArticuloInventarioRepository extends JpaRepository<ArticuloInve
     /** Filtros homologados con DemoPV#Inventory (buscador por nombre/codigo + categoria + stock bajo, todos opcionales). */
     // cast(:q as string): sin el cast, con :q null Postgres no logra inferir su tipo
     // dentro de lower(...) y truena "no existe la funcion lower(bytea)".
-    @Query("select a from ArticuloInventario a where a.centro.id = :centroId and a.deletedAt is null " +
+    @Query("select distinct a from ArticuloInventario a left join a.categorias c where a.centro.id = :centroId and a.deletedAt is null " +
            "and (cast(:q as string) is null or lower(a.nombre) like lower(concat('%', cast(:q as string), '%')) or lower(a.codigoBarras) like lower(concat('%', cast(:q as string), '%'))) " +
-           "and (cast(:categoriaId as long) is null or a.categoria.id = :categoriaId) " +
+           "and (cast(:categoriaId as long) is null or c.id = :categoriaId) " +
            "and (:soloStockBajo = false or a.stock <= a.stockMinimo)")
     Page<ArticuloInventario> buscar(@Param("centroId") Long centroId, @Param("q") String q,
                                      @Param("categoriaId") Long categoriaId, @Param("soloStockBajo") boolean soloStockBajo,
