@@ -3,14 +3,19 @@ package com.nexora.sport.service;
 import com.nexora.sport.dto.publico.PublicArticuloApartadoDto;
 import com.nexora.sport.dto.publico.PublicArticuloDto;
 import com.nexora.sport.dto.publico.PublicCentroDto;
+import com.nexora.sport.dto.publico.PublicPlanDto;
 import com.nexora.sport.exception.ResourceNotFoundException;
 import com.nexora.sport.model.ArticuloInventario;
 import com.nexora.sport.model.CategoriaInventario;
 import com.nexora.sport.model.Centro;
+import com.nexora.sport.model.Disciplina;
 import com.nexora.sport.model.ImagenArticulo;
+import com.nexora.sport.model.MembresiaPlan;
 import com.nexora.sport.repository.ArticuloInventarioRepository;
 import com.nexora.sport.repository.CentroRepository;
 import com.nexora.sport.repository.ImagenArticuloRepository;
+import com.nexora.sport.repository.MembresiaPlanRepository;
+import com.nexora.sport.repository.MembresiaRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,12 +30,17 @@ public class PublicCatalogService {
     private final CentroRepository centroRepository;
     private final ArticuloInventarioRepository articuloRepository;
     private final ImagenArticuloRepository imagenArticuloRepository;
+    private final MembresiaPlanRepository membresiaPlanRepository;
+    private final MembresiaRepository membresiaRepository;
 
     public PublicCatalogService(CentroRepository centroRepository, ArticuloInventarioRepository articuloRepository,
-                                 ImagenArticuloRepository imagenArticuloRepository) {
+                                 ImagenArticuloRepository imagenArticuloRepository,
+                                 MembresiaPlanRepository membresiaPlanRepository, MembresiaRepository membresiaRepository) {
         this.centroRepository = centroRepository;
         this.articuloRepository = articuloRepository;
         this.imagenArticuloRepository = imagenArticuloRepository;
+        this.membresiaPlanRepository = membresiaPlanRepository;
+        this.membresiaRepository = membresiaRepository;
     }
 
     @Transactional(readOnly = true)
@@ -66,15 +76,42 @@ public class PublicCatalogService {
                             : precio;
                     List<String> imagenes = imagenesDe(a);
                     return new PublicArticuloApartadoDto(
-                            a.getId(), a.getNombre(), nombresCategorias(a),
+                            a.getId(), a.getNombre(), nombresCategorias(a), nombresCategoriasLista(a),
                             precio, descuentoPct, precioConDescuento, imagenPrincipal(a, imagenes), imagenes, a.getStock());
                 })
                 .toList();
     }
 
+    /** Los planes activos del centro, para la pestaña "Planes" de la tienda publica de
+     * apartados (seccion 28 del encargo): mismo candado que listarApartables (apartadosActivo),
+     * porque viven en la misma pagina publica. */
+    @Transactional(readOnly = true)
+    public List<PublicPlanDto> listarPlanes(String slug) {
+        Centro centro = resolverCentroApartados(slug);
+        return membresiaPlanRepository.findByCentroIdAndActivoTrue(centro.getId()).stream()
+                .map(this::toPublicPlanDto)
+                .toList();
+    }
+
+    private PublicPlanDto toPublicPlanDto(MembresiaPlan p) {
+        long inscritos = membresiaRepository.countVigentesPorPlan(p.getId());
+        Integer cupoDisponible = p.getLimiteAlumnos() != null ? Math.max(0, p.getLimiteAlumnos() - (int) inscritos) : null;
+        return new PublicPlanDto(
+                p.getId(), p.getNombre(), p.getTipoPlan().name(),
+                p.getDuracionCantidad(), p.getDuracionUnidad() != null ? p.getDuracionUnidad().name() : null,
+                p.getNumeroClasesIncluidas(), p.getPrecio(), p.isAccesoCompleto(), p.isPermiteAbonos(),
+                p.getLimiteAlumnos(), cupoDisponible,
+                p.getDisciplinas().stream().map(Disciplina::getNombre).toList()
+        );
+    }
+
     private String nombresCategorias(ArticuloInventario a) {
         return a.getCategorias().isEmpty() ? null
                 : a.getCategorias().stream().map(CategoriaInventario::getNombre).collect(Collectors.joining(", "));
+    }
+
+    private List<String> nombresCategoriasLista(ArticuloInventario a) {
+        return a.getCategorias().stream().map(CategoriaInventario::getNombre).sorted().toList();
     }
 
     /** Hasta 3 fotos (ver ImagenArticuloService, tope de 3 al subir): la portada

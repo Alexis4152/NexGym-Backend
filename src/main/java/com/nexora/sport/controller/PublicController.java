@@ -6,6 +6,7 @@ import com.nexora.sport.dto.publico.PublicApartadoResponseDto;
 import com.nexora.sport.dto.publico.PublicArticuloApartadoDto;
 import com.nexora.sport.dto.publico.PublicArticuloDto;
 import com.nexora.sport.dto.publico.PublicCentroDto;
+import com.nexora.sport.dto.publico.PublicPlanDto;
 import com.nexora.sport.service.ApartadoService;
 import com.nexora.sport.service.PublicCatalogService;
 import jakarta.validation.Valid;
@@ -39,6 +40,11 @@ public class PublicController {
     @GetMapping("/apartables")
     public ApiResponse<List<PublicArticuloApartadoDto>> listarApartables(@PathVariable String slug) {
         return ApiResponse.ok(publicCatalogService.listarApartables(slug));
+    }
+
+    @GetMapping("/planes")
+    public ApiResponse<List<PublicPlanDto>> listarPlanes(@PathVariable String slug) {
+        return ApiResponse.ok(publicCatalogService.listarPlanes(slug));
     }
 
     @PostMapping("/apartados")
