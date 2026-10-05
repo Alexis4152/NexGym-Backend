@@ -29,6 +29,12 @@ public class ArticuloInventario {
     @JoinColumn(name = "centro_id", nullable = false)
     private Centro centro;
 
+    /** Cada sucursal lleva su PROPIO inventario (stock, precio, todo) -- este articulo le
+     * pertenece exclusivamente a ella, no se comparte entre sucursales del mismo centro. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sucursal_id", nullable = false)
+    private Sucursal sucursal;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "articulo_categorias",

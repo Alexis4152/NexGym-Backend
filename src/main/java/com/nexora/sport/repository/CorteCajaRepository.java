@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,17 +20,26 @@ public interface CorteCajaRepository extends JpaRepository<CorteCaja, Long> {
     Page<CorteCaja> findByCentroId(Long centroId, Pageable pageable);
     List<CorteCaja> findByCentroIdAndEstado(Long centroId, EstadoCorteCaja estado);
 
-    /** Filtros homologados con DemoPV#CashCutController (desde/hasta/estado/cajero, todos opcionales). */
+    /** Filtros homologados con DemoPV#CashCutController (desde/hasta/estado/cajero, todos opcionales),
+     * mas dos capas de alcance por sucursal (CorteCaja no tiene columna propia de sucursal: se
+     * deriva de la del cajero que lo abrio, c.usuario.sucursal):
+     *  - sucursalIds: el alcance AUTORIZADO del actor (Encargado/Admin) -- null = sin restriccion
+     *    (Dueno/SUPER_ADMIN); nunca lo manda el cliente, lo calcula CorteCajaService#listar.
+     *  - sucursalId: el filtro OPCIONAL que el propio Dueno eligio en pantalla ("ver solo esta
+     *    sucursal"), independiente del anterior. */
     @Query("select c from CorteCaja c where c.centro.id = :centroId " +
            // cast(:x as tipo) en el "is null": ver nota en VentaRepository/ApartadoRepository.
            "and (cast(:desde as timestamp) is null or c.abiertoEn >= :desde) " +
            "and (cast(:hasta as timestamp) is null or c.abiertoEn < :hasta) " +
            "and (cast(:estado as string) is null or c.estado = :estado) " +
            "and (cast(:usuarioId as long) is null or c.usuario.id = :usuarioId) " +
+           "and (:sucursalIds is null or c.usuario.sucursal.id in :sucursalIds) " +
+           "and (cast(:sucursalId as long) is null or c.usuario.sucursal.id = :sucursalId) " +
            "order by c.abiertoEn desc")
     Page<CorteCaja> buscar(@Param("centroId") Long centroId, @Param("desde") LocalDateTime desde,
                            @Param("hasta") LocalDateTime hasta, @Param("estado") EstadoCorteCaja estado,
-                           @Param("usuarioId") Long usuarioId, Pageable pageable);
+                           @Param("usuarioId") Long usuarioId, @Param("sucursalIds") Collection<Long> sucursalIds,
+                           @Param("sucursalId") Long sucursalId, Pageable pageable);
 
     /** Cajeros distintos que han abierto un corte en este centro, para el filtro (no requiere seccion USUARIOS). */
     @Query("select distinct c.usuario from CorteCaja c where c.centro.id = :centroId order by c.usuario.nombre")

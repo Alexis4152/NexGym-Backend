@@ -17,6 +17,12 @@ public interface ClaseRepository extends JpaRepository<Clase, Long> {
     List<Clase> findByCentroIdAndActivoTrue(Long centroId);
     List<Clase> findByInstructorId(Long instructorId);
 
+    /** Para el colchon de 90 minutos entre sucursales distintas (seccion 33 del encargo):
+     * todas las clases activas del instructor ESE dia, de cualquier sucursal -- el calculo
+     * del colchon se hace en Java (ClaseService#validarColchonEntreSucursales), comparar
+     * intervalos de hora con un margen minimo no es practico en JPQL puro. */
+    List<Clase> findByInstructorIdAndDiaSemanaAndActivoTrue(Long instructorId, DiaSemana diaSemana);
+
     /** Alcance por sucursal (una o varias, ver TenantScope#sucursalesPermitidas) y/o por
      * instructor-ownership (null en cualquiera = sin esa restriccion). */
     @Query("select c from Clase c where c.centro.id = :centroId " +

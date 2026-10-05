@@ -117,6 +117,7 @@ public class CentroService {
         if (request.notificacionesInternoActivo() != null) centro.setNotificacionesInternoActivo(request.notificacionesInternoActivo());
         if (request.notificacionesDiasAntesVencimiento() != null) centro.setNotificacionesDiasAntesVencimiento(request.notificacionesDiasAntesVencimiento());
         if (request.notificacionesHorasAntesClase() != null) centro.setNotificacionesHorasAntesClase(request.notificacionesHorasAntesClase());
+        centro.setHoraCierreAutomaticoCorte(request.horaCierreAutomaticoCorte());
 
         String slug = request.slugPublico();
         if (slug == null || slug.isBlank()) {
@@ -148,6 +149,7 @@ public class CentroService {
                 c.isPermitirAccesoConAdeudo(), c.getDiasInactividadRiesgo(),
                 c.isNotificacionesMembresiaActivo(), c.isNotificacionesClaseActivo(),
                 c.isNotificacionesEmailActivo(), c.isNotificacionesInternoActivo(),
-                c.getNotificacionesDiasAntesVencimiento(), c.getNotificacionesHorasAntesClase());
+                c.getNotificacionesDiasAntesVencimiento(), c.getNotificacionesHorasAntesClase(),
+                c.getHoraCierreAutomaticoCorte());
     }
 }

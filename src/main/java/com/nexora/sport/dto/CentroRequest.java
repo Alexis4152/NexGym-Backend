@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
+import java.time.LocalTime;
 
 public record CentroRequest(
         @NotBlank @Size(max = 150) String nombre,
@@ -24,5 +25,6 @@ public record CentroRequest(
         Boolean notificacionesEmailActivo,
         Boolean notificacionesInternoActivo,
         String notificacionesDiasAntesVencimiento,
-        Integer notificacionesHorasAntesClase
+        Integer notificacionesHorasAntesClase,
+        LocalTime horaCierreAutomaticoCorte
 ) {}

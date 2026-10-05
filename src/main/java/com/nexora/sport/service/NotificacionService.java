@@ -396,7 +396,7 @@ public class NotificacionService {
         Centro centro = a.getCentro();
         Map<String, String> v = mapOf("articulo", a.getNombre(), "stock", String.valueOf(a.getStock()), "minimo", String.valueOf(a.getStockMinimo()));
         crear(centro, TipoNotificacion.ADMIN_STOCK_BAJO, TipoDestinatario.CENTRO_ADMIN, null, null,
-                Seccion.INVENTARIO, null,
+                Seccion.INVENTARIO, a.getSucursal(),
                 ADMIN_STOCK_BAJO_TITULO, render(ADMIN_STOCK_BAJO_MSG, v),
                 "ARTICULO", a.getId(), null,
                 centro.isNotificacionesInventarioActivo(), null);
@@ -406,7 +406,7 @@ public class NotificacionService {
         Centro centro = a.getCentro();
         Map<String, String> v = mapOf("articulo", a.getNombre());
         crear(centro, TipoNotificacion.ADMIN_STOCK_AGOTADO, TipoDestinatario.CENTRO_ADMIN, null, null,
-                Seccion.INVENTARIO, null,
+                Seccion.INVENTARIO, a.getSucursal(),
                 ADMIN_STOCK_AGOTADO_TITULO, render(ADMIN_STOCK_AGOTADO_MSG, v),
                 "ARTICULO", a.getId(), null,
                 centro.isNotificacionesInventarioActivo(), null);
@@ -416,7 +416,7 @@ public class NotificacionService {
         Centro centro = a.getCentro();
         Map<String, String> v = mapOf("articulo", a.getNombre(), "stock", String.valueOf(a.getStock()));
         crear(centro, TipoNotificacion.ADMIN_STOCK_RECUPERADO, TipoDestinatario.CENTRO_ADMIN, null, null,
-                Seccion.INVENTARIO, null,
+                Seccion.INVENTARIO, a.getSucursal(),
                 ADMIN_STOCK_RECUPERADO_TITULO, render(ADMIN_STOCK_RECUPERADO_MSG, v),
                 "ARTICULO", a.getId(), null,
                 centro.isNotificacionesInventarioActivo(), null);
@@ -426,7 +426,7 @@ public class NotificacionService {
         Centro centro = a.getCentro();
         Map<String, String> v = mapOf("articulo", a.getNombre());
         crear(centro, TipoNotificacion.ADMIN_PRODUCTO_NUEVO, TipoDestinatario.CENTRO_ADMIN, null, null,
-                Seccion.INVENTARIO, null,
+                Seccion.INVENTARIO, a.getSucursal(),
                 ADMIN_PRODUCTO_NUEVO_TITULO, render(ADMIN_PRODUCTO_NUEVO_MSG, v),
                 "ARTICULO", a.getId(), "ADMIN_PRODUCTO_NUEVO:" + a.getId(),
                 centro.isNotificacionesInventarioActivo(), null);
@@ -629,6 +629,7 @@ public class NotificacionService {
                 n.getAlumno() != null ? n.getAlumno().getNombre() : null,
                 n.getInstructor() != null ? n.getInstructor().getId() : null,
                 n.getInstructor() != null ? n.getInstructor().getNombre() : null,
+                n.getSucursal() != null ? n.getSucursal().getNombre() : null,
                 n.getTitulo(), n.getMensaje(), n.getEntidadTipo(), n.getEntidadId(),
                 n.isLeida(), n.getLeidaEn(), n.getCreatedAt()
         );

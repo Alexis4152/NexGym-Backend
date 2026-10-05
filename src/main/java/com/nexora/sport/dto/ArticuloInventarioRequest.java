@@ -7,6 +7,11 @@ import java.math.BigDecimal;
 import java.util.Set;
 
 public record ArticuloInventarioRequest(
+        /** Solo tiene efecto para un actor sin sucursal activa fija (Dueno/SUPER_ADMIN en
+         * vista "todas"): para un Encargado/Recepcion se ignora y se usa SIEMPRE su propia
+         * sucursal activa (ver InventarioService#crear) -- nunca se confia en que el cliente
+         * mande la sucursal correcta para un actor ya restringido. */
+        Long sucursalId,
         Set<Long> categoriaIds,
         @NotBlank String nombre,
         @NotNull String tipo,

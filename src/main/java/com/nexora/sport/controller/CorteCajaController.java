@@ -35,9 +35,10 @@ public class CorteCajaController {
                                                             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
                                                             @RequestParam(required = false) String estado,
                                                             @RequestParam(required = false) Long usuarioId,
+                                                            @RequestParam(required = false) Long sucursalId,
                                                             @RequestParam(defaultValue = "0") int page,
                                                             @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.ok(corteCajaService.listar(actor, desde, hasta, estado, usuarioId, PageRequest.of(page, size)));
+        return ApiResponse.ok(corteCajaService.listar(actor, desde, hasta, estado, usuarioId, sucursalId, PageRequest.of(page, size)));
     }
 
     @GetMapping("/cajeros")
@@ -46,13 +47,13 @@ public class CorteCajaController {
     }
 
     @GetMapping("/{id}")
-    public ApiResponse<CorteCajaDto> obtener(@PathVariable Long id) {
-        return ApiResponse.ok(corteCajaService.obtener(id));
+    public ApiResponse<CorteCajaDto> obtener(@AuthenticationPrincipal Usuario actor, @PathVariable Long id) {
+        return ApiResponse.ok(corteCajaService.obtener(actor, id));
     }
 
     @GetMapping("/{id}/resumen")
-    public ApiResponse<CorteCajaResumenDto> resumen(@PathVariable Long id) {
-        return ApiResponse.ok(corteCajaService.resumen(id));
+    public ApiResponse<CorteCajaResumenDto> resumen(@AuthenticationPrincipal Usuario actor, @PathVariable Long id) {
+        return ApiResponse.ok(corteCajaService.resumen(actor, id));
     }
 
     @PostMapping("/abrir")

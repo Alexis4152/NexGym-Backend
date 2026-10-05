@@ -10,6 +10,7 @@ public record NotificacionDto(
         String alumnoNombre,
         Long instructorId,
         String instructorNombre,
+        String sucursalNombre,
         String titulo,
         String mensaje,
         String entidadTipo,

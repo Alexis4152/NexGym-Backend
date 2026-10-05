@@ -1,6 +1,7 @@
 package com.nexora.sport.dto;
 
 import java.math.BigDecimal;
+import java.time.LocalTime;
 
 public record CentroDto(
         Long id,
@@ -24,5 +25,6 @@ public record CentroDto(
         boolean notificacionesEmailActivo,
         boolean notificacionesInternoActivo,
         String notificacionesDiasAntesVencimiento,
-        Integer notificacionesHorasAntesClase
+        Integer notificacionesHorasAntesClase,
+        LocalTime horaCierreAutomaticoCorte
 ) {}

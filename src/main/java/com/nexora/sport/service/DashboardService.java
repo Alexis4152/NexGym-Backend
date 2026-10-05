@@ -51,7 +51,7 @@ public class DashboardService {
                 membresiaRepository.countByCentroIdAndEstado(centroId, EstadoMembresia.VENCIDA),
                 membresiaRepository.findProximasAVencer(centroId, hoy, hoy.plusDays(7)).size(),
                 asistenciaService.contarHoy(centroId),
-                inventarioService.stockBajo(actor),
+                inventarioService.stockBajo(actor, null),
                 membresiaService.proximasAVencer(actor, 7)
         );
     }

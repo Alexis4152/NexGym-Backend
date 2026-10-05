@@ -5,6 +5,8 @@ import java.util.Set;
 
 public record ArticuloInventarioDto(
         Long id,
+        Long sucursalId,
+        String sucursalNombre,
         Set<Long> categoriaIds,
         Set<String> categoriaNombres,
         String nombre,

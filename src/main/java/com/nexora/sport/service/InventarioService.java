@@ -25,19 +25,22 @@ public class InventarioService {
     private final MovimientoInventarioRepository movimientoRepository;
     private final DisciplinaRepository disciplinaRepository;
     private final CentroRepository centroRepository;
+    private final SucursalRepository sucursalRepository;
     private final ImagenArticuloRepository imagenArticuloRepository;
     private final TenantScope tenantScope;
     private final NotificacionService notificacionService;
 
     public InventarioService(ArticuloInventarioRepository articuloRepository, CategoriaInventarioRepository categoriaRepository,
                               MovimientoInventarioRepository movimientoRepository, DisciplinaRepository disciplinaRepository,
-                              CentroRepository centroRepository, ImagenArticuloRepository imagenArticuloRepository,
+                              CentroRepository centroRepository, SucursalRepository sucursalRepository,
+                              ImagenArticuloRepository imagenArticuloRepository,
                               TenantScope tenantScope, NotificacionService notificacionService) {
         this.articuloRepository = articuloRepository;
         this.categoriaRepository = categoriaRepository;
         this.movimientoRepository = movimientoRepository;
         this.disciplinaRepository = disciplinaRepository;
         this.centroRepository = centroRepository;
+        this.sucursalRepository = sucursalRepository;
         this.imagenArticuloRepository = imagenArticuloRepository;
         this.tenantScope = tenantScope;
         this.notificacionService = notificacionService;
@@ -61,33 +64,81 @@ public class InventarioService {
 
     // ---- Articulos ----
     @Transactional(readOnly = true)
-    public PageResponse<ArticuloInventarioDto> listar(Usuario actor, String q, Long categoriaId, boolean soloStockBajo, Pageable pageable) {
+    public PageResponse<ArticuloInventarioDto> listar(Usuario actor, String q, Long categoriaId, boolean soloStockBajo,
+                                                        Long sucursalIdFiltro, Pageable pageable) {
         Long centroId = tenantScope.scopeId(actor);
+        Long sucursalId = sucursalEfectiva(actor, sucursalIdFiltro);
         String texto = (q == null || q.isBlank()) ? null : q;
-        return PageResponse.of(articuloRepository.buscar(centroId, texto, categoriaId, soloStockBajo, pageable), this::toDto);
+        return PageResponse.of(articuloRepository.buscar(centroId, sucursalId, texto, categoriaId, soloStockBajo, pageable), this::toDto);
     }
 
     @Transactional(readOnly = true)
-    public List<ArticuloInventarioDto> stockBajo(Usuario actor) {
-        return articuloRepository.findConStockBajo(tenantScope.scopeId(actor)).stream().map(this::toDto).toList();
+    public List<ArticuloInventarioDto> stockBajo(Usuario actor, Long sucursalIdFiltro) {
+        Long sucursalId = sucursalEfectiva(actor, sucursalIdFiltro);
+        return articuloRepository.findConStockBajo(tenantScope.scopeId(actor), sucursalId).stream().map(this::toDto).toList();
     }
 
     @Transactional(readOnly = true)
     public ArticuloInventarioDto buscarPorCodigoBarras(Usuario actor, String codigoBarras) {
         return articuloRepository.findByCentroIdAndCodigoBarras(tenantScope.scopeId(actor), codigoBarras)
+                .filter(a -> tenantScope.sucursalPermite(actor, a.getSucursal().getId()))
                 .map(this::toDto).orElse(null);
+    }
+
+    /** Busqueda de solo lectura en el inventario de las DEMAS sucursales del centro (seccion
+     * 31 del encargo): para cuando un articulo no existe o no tiene stock en la sucursal
+     * del que busca -- nunca se puede vender desde aqui, solo informa donde si hay. */
+    @Transactional(readOnly = true)
+    public List<ArticuloOtraSucursalDto> buscarEnOtrasSucursales(Usuario actor, String q) {
+        Long centroId = tenantScope.scopeId(actor);
+        Long miSucursal = tenantScope.sucursalActivaId(actor);
+        if (miSucursal == null) return List.of(); // Dueno/SUPER_ADMIN ya ven todas las sucursales de por si
+        return articuloRepository.buscarEnOtrasSucursales(centroId, miSucursal, q).stream()
+                .filter(a -> a.getStock() > 0)
+                .map(a -> new ArticuloOtraSucursalDto(a.getId(), a.getNombre(), a.getSucursal().getId(), a.getSucursal().getNombre(), a.getStock()))
+                .toList();
     }
 
     public ArticuloInventario buscar(Long id) {
         return articuloRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Articulo no encontrado"));
     }
 
+    /** Nunca devuelve un articulo de otra sucursal (aislamiento de "cada sucursal su propio
+     * inventario"): un Dueno/SUPER_ADMIN sin restriccion si puede, un Encargado/Recepcion solo
+     * si el articulo pertenece a una de sus sucursales autorizadas. */
+    public ArticuloInventario buscarEnAlcance(Usuario actor, Long id) {
+        ArticuloInventario a = buscar(id);
+        if (!tenantScope.sucursalPermite(actor, a.getSucursal().getId())) {
+            throw new ResourceNotFoundException("Articulo no encontrado");
+        }
+        return a;
+    }
+
+    /** La sucursal sobre la que opera esta peticion: la activa del actor si esta restringido
+     * a una, o -- solo para un actor sin restriccion (Dueno/SUPER_ADMIN) -- el filtro opcional
+     * que haya elegido en la pantalla ("ver todas" vs "ver esta sucursal"). Nunca se confia en
+     * el filtro para un actor ya restringido a su(s) propia(s) sucursal(es). */
+    private Long sucursalEfectiva(Usuario actor, Long sucursalIdFiltro) {
+        Long activa = tenantScope.sucursalActivaId(actor);
+        return activa != null ? activa : sucursalIdFiltro;
+    }
+
     @Transactional
     public ArticuloInventarioDto crear(Usuario actor, ArticuloInventarioRequest request) {
         Long centroId = tenantScope.scopeId(actor);
+        Long sucursalId = sucursalEfectiva(actor, request.sucursalId());
+        if (sucursalId == null) {
+            throw new IllegalStateException("Selecciona una sucursal para crear el articulo");
+        }
+        Sucursal sucursal = sucursalRepository.findById(sucursalId)
+                .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada"));
+        if (!sucursal.getCentro().getId().equals(centroId)) {
+            throw new ResourceNotFoundException("Sucursal no encontrada");
+        }
         validarCodigoBarrasUnico(centroId, request.codigoBarras(), null);
         ArticuloInventario a = new ArticuloInventario();
         a.setCentro(centroRepository.getReferenceById(centroId));
+        a.setSucursal(sucursal);
         aplicar(a, request);
         a = articuloRepository.save(a);
         notificacionService.notificarAdminProductoNuevo(a);
@@ -95,8 +146,8 @@ public class InventarioService {
     }
 
     @Transactional
-    public ArticuloInventarioDto actualizar(Long id, ArticuloInventarioRequest request) {
-        ArticuloInventario a = buscar(id);
+    public ArticuloInventarioDto actualizar(Usuario actor, Long id, ArticuloInventarioRequest request) {
+        ArticuloInventario a = buscarEnAlcance(actor, id);
         validarCodigoBarrasUnico(a.getCentro().getId(), request.codigoBarras(), id);
         aplicar(a, request);
         return toDto(articuloRepository.save(a));
@@ -112,8 +163,8 @@ public class InventarioService {
     }
 
     @Transactional
-    public void desactivar(Long id) {
-        ArticuloInventario a = buscar(id);
+    public void desactivar(Usuario actor, Long id) {
+        ArticuloInventario a = buscarEnAlcance(actor, id);
         a.setActivo(false);
         articuloRepository.save(a);
     }
@@ -126,7 +177,7 @@ public class InventarioService {
         if (request.delta() > 0 && !PermisoEvaluator.tiene(actor, Permiso.INVENTARIO_ENTRADA)) {
             throw new IllegalStateException("No tienes permiso para agregar piezas al inventario");
         }
-        ArticuloInventario a = buscar(id);
+        ArticuloInventario a = buscarEnAlcance(actor, id);
         int anterior = a.getStock();
         int nuevo = anterior + request.delta();
         if (nuevo < 0) throw new IllegalArgumentException("El stock no puede quedar negativo");
@@ -200,6 +251,8 @@ public class InventarioService {
                 .map(ImagenArticulo::getRuta).orElse(a.getImagenUrl());
         return new ArticuloInventarioDto(
                 a.getId(),
+                a.getSucursal() != null ? a.getSucursal().getId() : null,
+                a.getSucursal() != null ? a.getSucursal().getNombre() : null,
                 a.getCategorias().stream().map(CategoriaInventario::getId).collect(Collectors.toSet()),
                 a.getCategorias().stream().map(CategoriaInventario::getNombre).collect(Collectors.toSet()),
                 a.getNombre(), a.getTipo().name(), a.getCodigoBarras(), a.getStock(), a.getStockMinimo(),

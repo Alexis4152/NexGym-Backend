@@ -97,6 +97,12 @@ public class VentaService {
         for (VentaRequest.ItemRequest ir : request.items()) {
             ArticuloInventario articulo = articuloRepository.findById(ir.articuloId())
                     .orElseThrow(() -> new ResourceNotFoundException("Articulo no encontrado"));
+            // Cada sucursal vende SOLO su propio inventario (seccion 31 del encargo): ver
+            // otras sucursales es de lectura (InventarioService#buscarEnOtrasSucursales),
+            // nunca una via para vender desde ahi.
+            if (!tenantScope.sucursalPermite(actor, articulo.getSucursal().getId())) {
+                throw new ResourceNotFoundException("Articulo no encontrado");
+            }
             if (!articulo.isActivo()) {
                 throw new IllegalStateException("Articulo inactivo: " + articulo.getNombre());
             }

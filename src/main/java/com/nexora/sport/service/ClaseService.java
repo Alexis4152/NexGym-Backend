@@ -26,7 +26,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -201,6 +203,40 @@ public class ClaseService {
         notificacionService.notificarInstructorClaseCancelada(clase);
     }
 
+    /** Colchon minimo de viaje entre sucursales (seccion 33 del encargo): si el instructor ya
+     * da clase ese mismo dia en OTRA sucursal, la nueva clase debe quedar al menos 90 minutos
+     * antes de que empiece esa otra clase o despues de que termine -- no aplica entre clases
+     * de la MISMA sucursal (ahi no hay traslado de por medio, el solape exacto ya lo bloquea
+     * existeConflictoInstructor). Ejemplo del encargo: 7:00-8:30 en Sucursal A bloquea
+     * Sucursal B hasta las 10:00; si ademas hay 11:00-12:30 en Sucursal A, no queda ningun
+     * hueco valido y se informa explicitamente en el mensaje. */
+    private static final int COLCHON_ENTRE_SUCURSALES_MINUTOS = 90;
+
+    private void validarColchonEntreSucursales(Instructor instructor, Sucursal sucursalNueva, DiaSemana dia,
+                                                 LocalTime horaInicio, LocalTime horaFin, Long excludeId) {
+        List<Clase> clasesDelDia = claseRepository.findByInstructorIdAndDiaSemanaAndActivoTrue(instructor.getId(), dia);
+        for (Clase otra : clasesDelDia) {
+            if (excludeId != null && otra.getId().equals(excludeId)) continue;
+            if (otra.getSucursal().getId().equals(sucursalNueva.getId())) continue;
+
+            Duration colchon;
+            if (!otra.getHoraFin().isAfter(horaInicio)) {
+                colchon = Duration.between(otra.getHoraFin(), horaInicio);
+            } else if (!otra.getHoraInicio().isBefore(horaFin)) {
+                colchon = Duration.between(horaFin, otra.getHoraInicio());
+            } else {
+                colchon = Duration.ZERO; // se solapan -- existeConflictoInstructor ya debio bloquear esto antes
+            }
+            if (colchon.toMinutes() < COLCHON_ENTRE_SUCURSALES_MINUTOS) {
+                throw new IllegalArgumentException(
+                        "No se puede asignar esta clase a " + instructor.getNombre() + ": tiene otra clase en "
+                                + otra.getSucursal().getNombre() + " de " + otra.getHoraInicio() + " a " + otra.getHoraFin()
+                                + ". Se requieren al menos " + COLCHON_ENTRE_SUCURSALES_MINUTOS
+                                + " minutos entre clases de distintas sucursales; elige un horario con ese margen disponible.");
+            }
+        }
+    }
+
     private void aplicar(Usuario actor, Clase clase, ClaseRequest request, Long excludeId) {
         if (!request.horaFin().isAfter(request.horaInicio())) {
             throw new IllegalArgumentException("La hora de fin debe ser posterior a la hora de inicio");
@@ -260,6 +296,7 @@ public class ClaseService {
             if (!disponibleEnSucursal) {
                 throw new IllegalArgumentException("Este instructor no esta disponible en la sucursal seleccionada");
             }
+            validarColchonEntreSucursales(instructor, sucursal, dia, request.horaInicio(), request.horaFin(), excludeId);
         }
 
         clase.setSucursal(sucursal);

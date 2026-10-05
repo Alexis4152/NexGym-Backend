@@ -1,5 +1,6 @@
 package com.nexora.sport.service;
 
+import com.nexora.sport.dto.publico.PublicApartadoSucursalDto;
 import com.nexora.sport.dto.publico.PublicArticuloApartadoDto;
 import com.nexora.sport.dto.publico.PublicArticuloDto;
 import com.nexora.sport.dto.publico.PublicCentroDto;
@@ -20,7 +21,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /** Catalogo publico sin login, aislado por slug (mismo patron que "Apartados" en DemoPV). */
@@ -63,23 +67,47 @@ public class PublicCatalogService {
                 .toList();
     }
 
+    /** Agrupa por nombre (seccion 31 del encargo): ahora cada sucursal tiene su propio
+     * ArticuloInventario independiente, pero el cliente ve UN producto y elige en cual
+     * sucursal recogerlo -- las que no tienen stock quedan en la lista igual (el frontend
+     * las muestra en gris, "Sin stock disponible"), nunca se ocultan una por una. Un grupo
+     * completo si desaparece si NINGUNA de sus sucursales tiene existencia. */
     @Transactional(readOnly = true)
     public List<PublicArticuloApartadoDto> listarApartables(String slug) {
         Centro centro = resolverCentroApartados(slug);
-        return articuloRepository.findByCentroIdAndReservableTrueAndActivoTrueAndDeletedAtIsNull(centro.getId()).stream()
-                .filter(a -> a.getStock() > 0)
-                .map(a -> {
-                    BigDecimal precio = a.getPrecioVenta() != null ? a.getPrecioVenta() : BigDecimal.ZERO;
-                    BigDecimal descuentoPct = a.getDescuentoApartadoPorcentaje();
-                    BigDecimal precioConDescuento = descuentoPct != null
-                            ? precio.subtract(precio.multiply(descuentoPct).divide(BigDecimal.valueOf(100)))
-                            : precio;
-                    List<String> imagenes = imagenesDe(a);
-                    return new PublicArticuloApartadoDto(
-                            a.getId(), a.getNombre(), nombresCategorias(a), nombresCategoriasLista(a),
-                            precio, descuentoPct, precioConDescuento, imagenPrincipal(a, imagenes), imagenes, a.getStock());
-                })
+        List<ArticuloInventario> articulos = articuloRepository
+                .findByCentroIdAndReservableTrueAndActivoTrueAndDeletedAtIsNull(centro.getId());
+
+        Map<String, List<ArticuloInventario>> grupos = new LinkedHashMap<>();
+        for (ArticuloInventario a : articulos) {
+            grupos.computeIfAbsent(a.getNombre().trim().toLowerCase(), k -> new java.util.ArrayList<>()).add(a);
+        }
+
+        return grupos.values().stream()
+                .filter(grupo -> grupo.stream().anyMatch(a -> a.getStock() > 0))
+                .map(this::toPublicApartadoDto)
                 .toList();
+    }
+
+    private PublicArticuloApartadoDto toPublicApartadoDto(List<ArticuloInventario> grupo) {
+        // El articulo "representante" (textos/fotos/precio a mostrar en la tarjeta): el
+        // primero con stock, o el primero del grupo si todos estan en 0.
+        ArticuloInventario rep = grupo.stream().filter(a -> a.getStock() > 0).findFirst().orElse(grupo.get(0));
+        BigDecimal precio = rep.getPrecioVenta() != null ? rep.getPrecioVenta() : BigDecimal.ZERO;
+        BigDecimal descuentoPct = rep.getDescuentoApartadoPorcentaje();
+        BigDecimal precioConDescuento = descuentoPct != null
+                ? precio.subtract(precio.multiply(descuentoPct).divide(BigDecimal.valueOf(100)))
+                : precio;
+        List<String> imagenes = imagenesDe(rep);
+        List<PublicApartadoSucursalDto> sucursales = grupo.stream()
+                .sorted(Comparator.comparing((ArticuloInventario a) -> a.getStock() > 0 ? 0 : 1)
+                        .thenComparing(a -> a.getSucursal().getNombre()))
+                .map(a -> new PublicApartadoSucursalDto(a.getId(), a.getSucursal().getId(), a.getSucursal().getNombre(),
+                        a.getSucursal().getDireccion(), a.getStock()))
+                .toList();
+        return new PublicArticuloApartadoDto(
+                rep.getId(), rep.getNombre(), nombresCategorias(rep), nombresCategoriasLista(rep),
+                precio, descuentoPct, precioConDescuento, imagenPrincipal(rep, imagenes), imagenes, sucursales);
     }
 
     /** Los planes activos del centro, para la pestaña "Planes" de la tienda publica de

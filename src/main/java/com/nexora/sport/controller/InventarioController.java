@@ -43,20 +43,28 @@ public class InventarioController {
                                                                      @RequestParam(required = false) String q,
                                                                      @RequestParam(required = false) Long categoriaId,
                                                                      @RequestParam(defaultValue = "false") boolean soloStockBajo,
+                                                                     @RequestParam(required = false) Long sucursalId,
                                                                      @RequestParam(defaultValue = "0") int page,
                                                                      @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.ok(inventarioService.listar(actor, q, categoriaId, soloStockBajo, PageRequest.of(page, size)));
+        return ApiResponse.ok(inventarioService.listar(actor, q, categoriaId, soloStockBajo, sucursalId, PageRequest.of(page, size)));
     }
 
     @GetMapping("/articulos/stock-bajo")
-    public ApiResponse<List<ArticuloInventarioDto>> stockBajo(@AuthenticationPrincipal Usuario actor) {
-        return ApiResponse.ok(inventarioService.stockBajo(actor));
+    public ApiResponse<List<ArticuloInventarioDto>> stockBajo(@AuthenticationPrincipal Usuario actor,
+                                                                @RequestParam(required = false) Long sucursalId) {
+        return ApiResponse.ok(inventarioService.stockBajo(actor, sucursalId));
     }
 
     @GetMapping("/articulos/por-codigo/{codigoBarras}")
     public ApiResponse<ArticuloInventarioDto> buscarPorCodigoBarras(@AuthenticationPrincipal Usuario actor,
                                                                      @PathVariable String codigoBarras) {
         return ApiResponse.ok(inventarioService.buscarPorCodigoBarras(actor, codigoBarras));
+    }
+
+    @GetMapping("/articulos/otras-sucursales")
+    public ApiResponse<List<ArticuloOtraSucursalDto>> buscarEnOtrasSucursales(@AuthenticationPrincipal Usuario actor,
+                                                                                @RequestParam String q) {
+        return ApiResponse.ok(inventarioService.buscarEnOtrasSucursales(actor, q));
     }
 
     @PostMapping("/articulos")
@@ -68,15 +76,15 @@ public class InventarioController {
 
     @PutMapping("/articulos/{id}")
     @PreAuthorize("@sectionAccess.check('INVENTARIO') and @permisoAccess.check('INVENTARIO_EDITAR')")
-    public ApiResponse<ArticuloInventarioDto> actualizar(@PathVariable Long id,
+    public ApiResponse<ArticuloInventarioDto> actualizar(@AuthenticationPrincipal Usuario actor, @PathVariable Long id,
                                                            @Valid @RequestBody ArticuloInventarioRequest request) {
-        return ApiResponse.ok("Articulo actualizado", inventarioService.actualizar(id, request));
+        return ApiResponse.ok("Articulo actualizado", inventarioService.actualizar(actor, id, request));
     }
 
     @DeleteMapping("/articulos/{id}")
     @PreAuthorize("@sectionAccess.check('INVENTARIO') and @permisoAccess.check('INVENTARIO_EDITAR')")
-    public ApiResponse<Void> desactivar(@PathVariable Long id) {
-        inventarioService.desactivar(id);
+    public ApiResponse<Void> desactivar(@AuthenticationPrincipal Usuario actor, @PathVariable Long id) {
+        inventarioService.desactivar(actor, id);
         return ApiResponse.ok("Articulo desactivado", null);
     }
 
@@ -87,26 +95,30 @@ public class InventarioController {
     }
 
     @GetMapping("/articulos/{id}/imagenes")
-    public ApiResponse<List<ImagenArticuloDto>> listarImagenes(@PathVariable Long id) {
+    public ApiResponse<List<ImagenArticuloDto>> listarImagenes(@AuthenticationPrincipal Usuario actor, @PathVariable Long id) {
+        inventarioService.buscarEnAlcance(actor, id);
         return ApiResponse.ok(imagenArticuloService.listar(id));
     }
 
     @PostMapping("/articulos/{id}/imagenes")
     @PreAuthorize("@sectionAccess.check('INVENTARIO') and @permisoAccess.check('INVENTARIO_EDITAR')")
-    public ApiResponse<ImagenArticuloDto> subirImagen(@PathVariable Long id, @RequestParam("file") MultipartFile file) {
-        return ApiResponse.ok("Foto agregada", imagenArticuloService.subir(inventarioService.buscar(id), file));
+    public ApiResponse<ImagenArticuloDto> subirImagen(@AuthenticationPrincipal Usuario actor, @PathVariable Long id,
+                                                        @RequestParam("file") MultipartFile file) {
+        return ApiResponse.ok("Foto agregada", imagenArticuloService.subir(inventarioService.buscarEnAlcance(actor, id), file));
     }
 
     @PutMapping("/articulos/{id}/imagenes/{imagenId}/principal")
     @PreAuthorize("@sectionAccess.check('INVENTARIO') and @permisoAccess.check('INVENTARIO_EDITAR')")
-    public ApiResponse<Void> marcarPrincipal(@PathVariable Long id, @PathVariable Long imagenId) {
+    public ApiResponse<Void> marcarPrincipal(@AuthenticationPrincipal Usuario actor, @PathVariable Long id, @PathVariable Long imagenId) {
+        inventarioService.buscarEnAlcance(actor, id);
         imagenArticuloService.marcarPrincipal(id, imagenId);
         return ApiResponse.ok("Portada actualizada", null);
     }
 
     @DeleteMapping("/articulos/{id}/imagenes/{imagenId}")
     @PreAuthorize("@sectionAccess.check('INVENTARIO') and @permisoAccess.check('INVENTARIO_EDITAR')")
-    public ApiResponse<Void> eliminarImagen(@PathVariable Long id, @PathVariable Long imagenId) {
+    public ApiResponse<Void> eliminarImagen(@AuthenticationPrincipal Usuario actor, @PathVariable Long id, @PathVariable Long imagenId) {
+        inventarioService.buscarEnAlcance(actor, id);
         imagenArticuloService.eliminar(id, imagenId);
         return ApiResponse.ok("Foto eliminada", null);
     }

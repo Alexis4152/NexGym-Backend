@@ -7,6 +7,7 @@ public record CorteCajaDto(
         Long id,
         Long usuarioId,
         String usuarioNombre,
+        String sucursalNombre,
         String cerradoPorNombre,
         BigDecimal montoInicial,
         BigDecimal montoFinal,

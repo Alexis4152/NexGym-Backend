@@ -6,6 +6,7 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 /** Un centro deportivo / gimnasio: la frontera de tenant de todo el sistema. */
 @Entity
@@ -101,6 +102,13 @@ public class Centro {
     /** Horas de anticipacion para el recordatorio de clase reservada. Null o 0 = desactivado. */
     @Column(name = "notificaciones_horas_antes_clase")
     private Integer notificacionesHorasAntesClase = 24;
+
+    /** Hora del dia en que se cierran automaticamente los cortes de caja que alguien olvido
+     * cerrar (seccion 34 del encargo, mismo mecanismo que CashCut en DemoPV -- ahi es una
+     * config global unica; aqui vive por Centro porque cada gimnasio opera en su propio
+     * horario). Null = desactivado, nadie se cierra solo. Ver CorteCajaAutoCloseJob. */
+    @Column(name = "hora_cierre_automatico_corte")
+    private LocalTime horaCierreAutomaticoCorte;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
