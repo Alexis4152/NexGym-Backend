@@ -44,9 +44,11 @@ public class CajaController {
             @AuthenticationPrincipal Usuario actor,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
+            @RequestParam(required = false) Long usuarioId,
+            @RequestParam(required = false) Long sucursalId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.ok(cajaService.listarMovimientos(actor, desde, hasta, PageRequest.of(page, size)));
+        return ApiResponse.ok(cajaService.listarMovimientos(actor, desde, hasta, usuarioId, sucursalId, PageRequest.of(page, size)));
     }
 
     @PostMapping("/ingresos")

@@ -23,7 +23,12 @@ public record PublicArticuloApartadoDto(
         String imagenUrl,
         /** Hasta 3 fotos del articulo (ver ImagenArticuloService, tope de 3 por articulo). */
         List<String> imagenes,
-        /** Una entrada por sucursal donde existe este producto (incluye las de stock=0, para
-         * que el frontend las muestre en gris con "Sin stock disponible" en vez de ocultarlas). */
+        /** Suma del stock de TODAS las sucursales (seccion 38 del encargo): lo unico que se
+         * muestra en la tarjeta del producto -- la tienda publica ya no habla de sucursales
+         * hasta que el cliente aparta (ver {@link #sucursales}, usado solo ahi). */
+        int stockTotal,
+        /** Una entrada por sucursal donde existe este producto (incluye las de stock=0): el
+         * frontend las usa SOLO en el paso de apartar, para armar los radio button de
+         * sucursales disponibles -- nunca muestra la cantidad por sucursal, solo si hay o no. */
         List<PublicApartadoSucursalDto> sucursales
 ) {}

@@ -35,16 +35,18 @@ public class VentaController {
                                                         @RequestParam(required = false) String cliente,
                                                         @RequestParam(required = false) String metodoPago,
                                                         @RequestParam(required = false) String estado,
+                                                        @RequestParam(required = false) Long usuarioId,
+                                                        @RequestParam(required = false) Long sucursalId,
                                                         @RequestParam(defaultValue = "0") int page,
                                                         @RequestParam(defaultValue = "20") int size) {
         MetodoPago metodo = (metodoPago != null && !metodoPago.isBlank()) ? MetodoPago.valueOf(metodoPago) : null;
         EstadoVenta estadoVenta = (estado != null && !estado.isBlank()) ? EstadoVenta.valueOf(estado) : null;
-        return ApiResponse.ok(ventaService.listar(actor, desde, hasta, cliente, metodo, estadoVenta, PageRequest.of(page, size)));
+        return ApiResponse.ok(ventaService.listar(actor, desde, hasta, cliente, metodo, estadoVenta, usuarioId, sucursalId, PageRequest.of(page, size)));
     }
 
     @GetMapping("/{id}")
-    public ApiResponse<VentaDto> obtener(@PathVariable Long id) {
-        return ApiResponse.ok(ventaService.obtener(id));
+    public ApiResponse<VentaDto> obtener(@AuthenticationPrincipal Usuario actor, @PathVariable Long id) {
+        return ApiResponse.ok(ventaService.obtener(actor, id));
     }
 
     @GetMapping("/{id}/ticket-escpos")

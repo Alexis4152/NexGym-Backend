@@ -101,12 +101,28 @@ public class CajaService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<MovimientoFinancieroDto> listarMovimientos(Usuario actor, LocalDate desde, LocalDate hasta, Pageable pageable) {
+    /** Visibilidad en 2 niveles (seccion 37 del encargo, mismo patron que Ventas/CorteCaja):
+     *  - Dueno/SUPER_ADMIN: todo el centro, con filtros libres (sucursal, vendedor, fechas).
+     *  - Encargado/Recepcion/Caja-Ventas: solo los movimientos de SU(S) sucursal(es) autorizada(s)
+     *    (mas los que no tienen sucursal propia, ej. registrados por el Dueno "operando todas").
+     *    Los filtros de sucursal/vendedor solo tienen efecto para Dueno/SUPER_ADMIN. */
+    public PageResponse<MovimientoFinancieroDto> listarMovimientos(Usuario actor, LocalDate desde, LocalDate hasta,
+                                                                     Long usuarioIdFiltro, Long sucursalIdFiltro, Pageable pageable) {
         Long centroId = tenantScope.scopeId(actor);
-        var page = (desde != null && hasta != null)
-                ? movimientoRepository.findByCentroIdAndFechaBetweenAndAnuladoFalseOrderByFechaDesc(centroId, desde, hasta, pageable)
-                : movimientoRepository.findByCentroIdAndAnuladoFalseOrderByFechaDesc(centroId, pageable);
-        return PageResponse.of(page, this::toDto);
+
+        Set<Long> sucursalesAutorizadas = null;
+        Long sucursalId = null;
+        Long usuarioId = null;
+        if (tenantScope.isSupervisorOSuperior(actor)) {
+            sucursalId = sucursalIdFiltro;
+            usuarioId = usuarioIdFiltro;
+        } else {
+            sucursalesAutorizadas = tenantScope.sucursalesPermitidas(actor);
+        }
+
+        return PageResponse.of(
+                movimientoRepository.buscar(centroId, desde, hasta, usuarioId, sucursalesAutorizadas, sucursalId, pageable),
+                this::toDto);
     }
 
     @Transactional
@@ -229,6 +245,12 @@ public class CajaService {
         m.setAlumno(membresia.getAlumno());
         m.setMembresia(membresia);
         m.setRegistradoPor(registradoPor);
+        // El alumno/membresia no tiene sucursal propia (ya no estan ligados a una, ver
+        // AlumnoService): la sucursal de este ingreso es la de quien lo cobro, igual que
+        // un egreso manual -- sucursalActivaId ya re-resuelve un actor "detached" por su
+        // cuenta (TenantScope#fresh), es seguro llamarlo directo con registradoPor.
+        Long sucursalActiva = tenantScope.sucursalActivaId(registradoPor);
+        if (sucursalActiva != null) m.setSucursal(sucursalRepository.getReferenceById(sucursalActiva));
         return movimientoRepository.save(m);
     }
 
@@ -262,6 +284,10 @@ public class CajaService {
         m.setDescripcion("Venta de tienda #" + venta.getId()
                 + (venta.getClienteNombre() != null && !venta.getClienteNombre().isBlank() ? " - " + venta.getClienteNombre() : ""));
         m.setRegistradoPor(registradoPor);
+        // La sucursal de este ingreso es la MISMA que ya quedo grabada en la venta (ver
+        // Venta#sucursal, snapshot tomado al crearla) -- no se vuelve a resolver aparte,
+        // para que ambos registros coincidan siempre.
+        m.setSucursal(venta.getSucursal());
         return movimientoRepository.save(m);
     }
 

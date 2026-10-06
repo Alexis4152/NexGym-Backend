@@ -8,6 +8,7 @@ public record VentaDto(
         Long id,
         Long corteCajaId,
         String usuarioNombre,
+        String sucursalNombre,
         String clienteNombre,
         String clienteEmail,
         BigDecimal subtotal,

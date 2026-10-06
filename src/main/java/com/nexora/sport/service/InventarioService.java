@@ -12,8 +12,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -69,7 +73,64 @@ public class InventarioService {
         Long centroId = tenantScope.scopeId(actor);
         Long sucursalId = sucursalEfectiva(actor, sucursalIdFiltro);
         String texto = (q == null || q.isBlank()) ? null : q;
+        if (sucursalId == null) {
+            // "Todas las sucursales" (solo Dueno/SUPER_ADMIN llegan aqui, ver sucursalEfectiva):
+            // una fila por nombre con el stock SUMADO entre sucursales, no una fila por cada una.
+            return listarAgregado(centroId, texto, categoriaId, soloStockBajo, pageable);
+        }
         return PageResponse.of(articuloRepository.buscar(centroId, sucursalId, texto, categoriaId, soloStockBajo, pageable), this::toDto);
+    }
+
+    /** Agrupa por nombre y suma stock/stockMinimo entre sucursales (seccion 35 del encargo):
+     * se agrupa en Java sobre el conjunto COMPLETO porque sumar correctamente entre sucursales
+     * no se puede hacer pagina por pagina de la BD -- el agrupado cruzaria paginas y el total
+     * quedaria incompleto. Se pagina despues, ya con los grupos armados. */
+    private PageResponse<ArticuloInventarioDto> listarAgregado(Long centroId, String q, Long categoriaId,
+                                                                 boolean soloStockBajo, Pageable pageable) {
+        List<ArticuloInventario> todos = articuloRepository.buscarTodosParaAgregado(centroId, q, categoriaId);
+        Map<String, List<ArticuloInventario>> grupos = new LinkedHashMap<>();
+        for (ArticuloInventario a : todos) {
+            grupos.computeIfAbsent(a.getNombre().trim().toLowerCase(), k -> new ArrayList<>()).add(a);
+        }
+        List<ArticuloInventarioDto> agregados = grupos.values().stream()
+                .map(this::toDtoAgregado)
+                .filter(dto -> !soloStockBajo || dto.stock() <= dto.stockMinimo())
+                .sorted(Comparator.comparing(ArticuloInventarioDto::nombre, String.CASE_INSENSITIVE_ORDER))
+                .toList();
+
+        int total = agregados.size();
+        int desde = Math.min((int) pageable.getOffset(), total);
+        int hasta = Math.min(desde + pageable.getPageSize(), total);
+        int totalPaginas = pageable.getPageSize() == 0 ? 0 : (int) Math.ceil(total / (double) pageable.getPageSize());
+        return new PageResponse<>(agregados.subList(desde, hasta), pageable.getPageNumber(), pageable.getPageSize(), total, totalPaginas);
+    }
+
+    private ArticuloInventarioDto toDtoAgregado(List<ArticuloInventario> grupo) {
+        ArticuloInventario rep = grupo.get(0);
+        int stockTotal = grupo.stream().mapToInt(ArticuloInventario::getStock).sum();
+        int stockMinimoTotal = grupo.stream().mapToInt(ArticuloInventario::getStockMinimo).sum();
+        boolean vendible = grupo.stream().anyMatch(ArticuloInventario::isVendible);
+        boolean reservable = grupo.stream().anyMatch(ArticuloInventario::isReservable);
+        boolean activo = grupo.stream().anyMatch(ArticuloInventario::isActivo);
+        String imagenUrl = grupo.stream()
+                .map(a -> imagenArticuloRepository.findFirstByArticuloIdAndEsPrincipalTrue(a.getId()).map(ImagenArticulo::getRuta).orElse(a.getImagenUrl()))
+                .filter(u -> u != null).findFirst().orElse(null);
+        Set<Long> categoriaIds = new HashSet<>();
+        Set<String> categoriaNombres = new HashSet<>();
+        Set<Long> disciplinaIds = new HashSet<>();
+        Set<String> disciplinaNombres = new HashSet<>();
+        for (ArticuloInventario a : grupo) {
+            a.getCategorias().forEach(c -> { categoriaIds.add(c.getId()); categoriaNombres.add(c.getNombre()); });
+            a.getDisciplinas().forEach(d -> { disciplinaIds.add(d.getId()); disciplinaNombres.add(d.getNombre()); });
+        }
+        return new ArticuloInventarioDto(
+                null, null, null, grupo.size(),
+                categoriaIds, categoriaNombres,
+                rep.getNombre(), rep.getTipo().name(), null, stockTotal, stockMinimoTotal,
+                rep.getCosto(), rep.getPrecioVenta(), vendible, imagenUrl, reservable,
+                rep.getDescuentoApartadoPorcentaje(), activo,
+                disciplinaIds, disciplinaNombres
+        );
     }
 
     @Transactional(readOnly = true)
@@ -253,6 +314,7 @@ public class InventarioService {
                 a.getId(),
                 a.getSucursal() != null ? a.getSucursal().getId() : null,
                 a.getSucursal() != null ? a.getSucursal().getNombre() : null,
+                null,
                 a.getCategorias().stream().map(CategoriaInventario::getId).collect(Collectors.toSet()),
                 a.getCategorias().stream().map(CategoriaInventario::getNombre).collect(Collectors.toSet()),
                 a.getNombre(), a.getTipo().name(), a.getCodigoBarras(), a.getStock(), a.getStockMinimo(),

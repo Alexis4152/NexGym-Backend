@@ -4,7 +4,6 @@ import com.nexora.sport.dto.ApartadoRequest;
 import com.nexora.sport.dto.ApiResponse;
 import com.nexora.sport.dto.publico.PublicApartadoResponseDto;
 import com.nexora.sport.dto.publico.PublicArticuloApartadoDto;
-import com.nexora.sport.dto.publico.PublicArticuloDto;
 import com.nexora.sport.dto.publico.PublicCentroDto;
 import com.nexora.sport.dto.publico.PublicPlanDto;
 import com.nexora.sport.service.ApartadoService;
@@ -30,11 +29,6 @@ public class PublicController {
     @GetMapping
     public ApiResponse<PublicCentroDto> obtenerCentro(@PathVariable String slug) {
         return ApiResponse.ok(publicCatalogService.obtenerCentro(slug));
-    }
-
-    @GetMapping("/productos")
-    public ApiResponse<List<PublicArticuloDto>> listarProductos(@PathVariable String slug) {
-        return ApiResponse.ok(publicCatalogService.listarProductos(slug));
     }
 
     @GetMapping("/apartables")

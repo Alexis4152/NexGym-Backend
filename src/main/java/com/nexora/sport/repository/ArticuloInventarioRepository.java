@@ -31,6 +31,16 @@ public interface ArticuloInventarioRepository extends JpaRepository<ArticuloInve
                                      @Param("categoriaId") Long categoriaId, @Param("soloStockBajo") boolean soloStockBajo,
                                      Pageable pageable);
 
+    /** Para la vista agregada "todas las sucursales" (InventarioService#listarAgregado): TODO
+     * el centro sin paginar -- sumar stock entre sucursales por nombre solo se puede hacer
+     * bien sobre el conjunto completo, no pagina por pagina de la BD (el agrupado cruzaria
+     * paginas). El catalogo de un gimnasio no es tan grande como para que esto pese. */
+    @Query("select distinct a from ArticuloInventario a left join a.categorias c where a.centro.id = :centroId and a.deletedAt is null " +
+           "and (cast(:q as string) is null or lower(a.nombre) like lower(concat('%', cast(:q as string), '%')) or lower(a.codigoBarras) like lower(concat('%', cast(:q as string), '%'))) " +
+           "and (cast(:categoriaId as long) is null or c.id = :categoriaId)")
+    List<ArticuloInventario> buscarTodosParaAgregado(@Param("centroId") Long centroId, @Param("q") String q,
+                                                       @Param("categoriaId") Long categoriaId);
+
     List<ArticuloInventario> findByCentroIdAndVendibleTrueAndActivoTrueAndDeletedAtIsNull(Long centroId);
 
     List<ArticuloInventario> findByCentroIdAndReservableTrueAndActivoTrueAndDeletedAtIsNull(Long centroId);

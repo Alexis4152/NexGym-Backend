@@ -28,6 +28,14 @@ public class Venta {
     @JoinColumn(name = "usuario_id", nullable = false)
     private Usuario usuario;
 
+    /** Sucursal del vendedor AL MOMENTO de la venta (seccion 36 del encargo): se guarda aqui
+     * en vez de leerse en vivo de usuario.sucursal porque esa referencia es mutable -- si el
+     * cajero cambia de sucursal despues, sus ventas viejas no se deben "mover" con el. Null
+     * solo en el caso raro de un Dueno/SUPER_ADMIN vendiendo sin sucursal activa elegida. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sucursal_id")
+    private Sucursal sucursal;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "corte_caja_id", nullable = false)
     private CorteCaja corteCaja;

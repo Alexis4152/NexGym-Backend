@@ -2,7 +2,6 @@ package com.nexora.sport.service;
 
 import com.nexora.sport.dto.publico.PublicApartadoSucursalDto;
 import com.nexora.sport.dto.publico.PublicArticuloApartadoDto;
-import com.nexora.sport.dto.publico.PublicArticuloDto;
 import com.nexora.sport.dto.publico.PublicCentroDto;
 import com.nexora.sport.dto.publico.PublicPlanDto;
 import com.nexora.sport.exception.ResourceNotFoundException;
@@ -47,24 +46,14 @@ public class PublicCatalogService {
         this.membresiaRepository = membresiaRepository;
     }
 
+    /** La "tienda publica" independiente (catalogo de solo lectura) ya no existe -- queda
+     * reemplazada por esta misma pagina de apartados, asi que el candado es apartadosActivo
+     * (antes era un flag aparte, catalogoPublicoActivo, que ya no se expone en el admin). */
     @Transactional(readOnly = true)
     public PublicCentroDto obtenerCentro(String slug) {
-        Centro centro = resolverCentro(slug);
+        Centro centro = resolverCentroApartados(slug);
         return new PublicCentroDto(centro.getNombre(), centro.getLogoUrl(), centro.getColorPrimario(),
                 centro.getTelefono(), centro.getDireccion(), centro.isApartadosActivo());
-    }
-
-    @Transactional(readOnly = true)
-    public List<PublicArticuloDto> listarProductos(String slug) {
-        Centro centro = resolverCentro(slug);
-        return articuloRepository.findByCentroIdAndVendibleTrueAndActivoTrueAndDeletedAtIsNull(centro.getId()).stream()
-                .map(a -> {
-                    List<String> imagenes = imagenesDe(a);
-                    return new PublicArticuloDto(
-                            a.getId(), a.getNombre(), nombresCategorias(a),
-                            a.getPrecioVenta(), imagenPrincipal(a, imagenes), imagenes);
-                })
-                .toList();
     }
 
     /** Agrupa por nombre (seccion 31 del encargo): ahora cada sucursal tiene su propio
@@ -105,9 +94,10 @@ public class PublicCatalogService {
                 .map(a -> new PublicApartadoSucursalDto(a.getId(), a.getSucursal().getId(), a.getSucursal().getNombre(),
                         a.getSucursal().getDireccion(), a.getStock()))
                 .toList();
+        int stockTotal = grupo.stream().mapToInt(ArticuloInventario::getStock).sum();
         return new PublicArticuloApartadoDto(
                 rep.getId(), rep.getNombre(), nombresCategorias(rep), nombresCategoriasLista(rep),
-                precio, descuentoPct, precioConDescuento, imagenPrincipal(rep, imagenes), imagenes, sucursales);
+                precio, descuentoPct, precioConDescuento, imagenPrincipal(rep, imagenes), imagenes, stockTotal, sucursales);
     }
 
     /** Los planes activos del centro, para la pestaña "Planes" de la tienda publica de
@@ -156,12 +146,6 @@ public class PublicCatalogService {
 
     private String imagenPrincipal(ArticuloInventario a, List<String> imagenes) {
         return !imagenes.isEmpty() ? imagenes.get(0) : a.getImagenUrl();
-    }
-
-    private Centro resolverCentro(String slug) {
-        return centroRepository.findBySlugPublicoAndActivoTrue(slug)
-                .filter(Centro::isCatalogoPublicoActivo)
-                .orElseThrow(() -> new ResourceNotFoundException("Catalogo no disponible"));
     }
 
     private Centro resolverCentroApartados(String slug) {

@@ -7,6 +7,12 @@ public record ArticuloInventarioDto(
         Long id,
         Long sucursalId,
         String sucursalNombre,
+        /** Solo tiene valor en la vista agregada "todas las sucursales" (Dueno/SUPER_ADMIN sin
+         * filtrar a una sola): cuantas sucursales se sumaron en esta fila. Null en una fila
+         * normal de una sola sucursal -- junto con sucursalId=null es como el frontend
+         * distingue una fila agregada (sin acciones de Ajustar/Editar/Desactivar, no hay un
+         * solo articulo al que apunten) de una real. */
+        Integer sucursalesCount,
         Set<Long> categoriaIds,
         Set<String> categoriaNombres,
         String nombre,

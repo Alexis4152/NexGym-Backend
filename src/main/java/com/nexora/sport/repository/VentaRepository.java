@@ -11,13 +11,22 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 
 public interface VentaRepository extends JpaRepository<Venta, Long> {
     List<Venta> findByCorteCajaId(Long corteCajaId);
     Page<Venta> findByCentroIdOrderByCreatedAtDesc(Long centroId, Pageable pageable);
 
-    /** Filtros homologados con DemoPV#Sales (Desde/Hasta/Cliente/Metodo/Estado, todos opcionales). */
+    /** Filtros homologados con DemoPV#Sales (Desde/Hasta/Cliente/Metodo/Estado, todos opcionales),
+     * mas dos capas de alcance por sucursal (v.sucursal: un snapshot tomado al momento de la
+     * venta, ver Venta#sucursal -- NO se deriva en vivo de v.usuario.sucursal porque esa
+     * referencia es mutable y "movería" ventas viejas si el cajero cambia de sucursal despues):
+     *  - sucursalIds: el alcance AUTORIZADO del actor (Encargado/Admin) -- null = sin restriccion
+     *    (Dueno/SUPER_ADMIN); nunca lo manda el cliente, lo calcula VentaService#listar.
+     *  - sucursalId: el filtro OPCIONAL que el propio Dueno eligio en pantalla ("ver solo esta
+     *    sucursal"), independiente del anterior.
+     *  - usuarioId: filtro de vendedor (quien registro la venta), opcional. */
     @Query("select v from Venta v where v.centro.id = :centroId " +
            // cast(:x as tipo) en el "is null": sin el cast, esa ocurrencia del parametro
            // (la que va suelta en el "is null", sin comparar contra ninguna columna) no
@@ -29,10 +38,14 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
            "and (cast(:cliente as string) is null or lower(v.clienteNombre) like lower(concat('%', cast(:cliente as string), '%'))) " +
            "and (cast(:metodoPago as string) is null or v.metodoPago = :metodoPago) " +
            "and (cast(:estado as string) is null or v.estado = :estado) " +
+           "and (cast(:usuarioId as long) is null or v.usuario.id = :usuarioId) " +
+           "and (:sucursalIds is null or v.sucursal.id in :sucursalIds) " +
+           "and (cast(:sucursalId as long) is null or v.sucursal.id = :sucursalId) " +
            "order by v.createdAt desc")
     Page<Venta> buscar(@Param("centroId") Long centroId, @Param("desde") LocalDateTime desde, @Param("hasta") LocalDateTime hasta,
                         @Param("cliente") String cliente, @Param("metodoPago") MetodoPago metodoPago,
-                        @Param("estado") EstadoVenta estado, Pageable pageable);
+                        @Param("estado") EstadoVenta estado, @Param("usuarioId") Long usuarioId,
+                        @Param("sucursalIds") Collection<Long> sucursalIds, @Param("sucursalId") Long sucursalId, Pageable pageable);
 
     /** Solo ventas COMPLETADA: una cancelada no debe sumar en ningun reporte. */
     @Query("select coalesce(sum(v.total), 0) from Venta v where v.centro.id = :centroId " +

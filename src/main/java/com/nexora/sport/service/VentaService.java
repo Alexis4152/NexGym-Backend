@@ -28,13 +28,16 @@ public class VentaService {
     private final TicketPdfService ticketPdfService;
     private final EscPosTicketService escPosTicketService;
     private final InventarioService inventarioService;
+    private final UsuarioRepository usuarioRepository;
+    private final SucursalRepository sucursalRepository;
     private final TenantScope tenantScope;
 
     public VentaService(VentaRepository ventaRepository, CorteCajaRepository corteRepository,
                          ArticuloInventarioRepository articuloRepository, MovimientoInventarioRepository movimientoInventarioRepository,
                          CentroRepository centroRepository, CajaService cajaService, MailService mailService,
                          TicketPdfService ticketPdfService, EscPosTicketService escPosTicketService,
-                         InventarioService inventarioService, TenantScope tenantScope) {
+                         InventarioService inventarioService, UsuarioRepository usuarioRepository,
+                         SucursalRepository sucursalRepository, TenantScope tenantScope) {
         this.ventaRepository = ventaRepository;
         this.corteRepository = corteRepository;
         this.articuloRepository = articuloRepository;
@@ -45,7 +48,17 @@ public class VentaService {
         this.ticketPdfService = ticketPdfService;
         this.escPosTicketService = escPosTicketService;
         this.inventarioService = inventarioService;
+        this.usuarioRepository = usuarioRepository;
+        this.sucursalRepository = sucursalRepository;
         this.tenantScope = tenantScope;
+    }
+
+    /** Sucursal a grabar en la venta (seccion 36 del encargo): la activa del actor si tiene
+     * una fija, o null en el caso raro de un Dueno/SUPER_ADMIN sin sucursal activa elegida
+     * (ver Venta#sucursal). */
+    private Sucursal sucursalParaVenta(Usuario actor) {
+        Long sucursalId = tenantScope.sucursalActivaId(actor);
+        return sucursalId != null ? sucursalRepository.getReferenceById(sucursalId) : null;
     }
 
     @Transactional(readOnly = true)
@@ -58,23 +71,60 @@ public class VentaService {
         return PageResponse.of(ventaRepository.findByCentroIdOrderByCreatedAtDesc(tenantScope.scopeId(actor), pageable), this::toDto);
     }
 
+    /** Visibilidad en 2 niveles (seccion 36 del encargo, mismo patron que CorteCajaService):
+     *  - Dueno/SUPER_ADMIN: todo el centro, "en vivo", con filtros libres (sucursal, vendedor,
+     *    fechas, cliente, metodo, estado).
+     *  - Encargado/Recepcion/Caja-Ventas: solo las ventas de SU(S) sucursal(es) autorizada(s)
+     *    -- de cualquier vendedor que haya trabajado ahi -- sin poder elegir otra. Los filtros
+     *    de sucursal/vendedor solo tienen efecto para Dueno/SUPER_ADMIN (ver nota del repositorio). */
     @Transactional(readOnly = true)
     public PageResponse<VentaDto> listar(Usuario actor, LocalDate desde, LocalDate hasta, String cliente,
-                                          MetodoPago metodoPago, EstadoVenta estado, Pageable pageable) {
+                                          MetodoPago metodoPago, EstadoVenta estado, Long usuarioIdFiltro,
+                                          Long sucursalIdFiltro, Pageable pageable) {
         Long centroId = tenantScope.scopeId(actor);
         LocalDateTime desdeFecha = desde != null ? desde.atStartOfDay() : null;
         LocalDateTime hastaFecha = hasta != null ? hasta.plusDays(1).atStartOfDay() : null;
         String texto = (cliente == null || cliente.isBlank()) ? null : cliente;
-        return PageResponse.of(ventaRepository.buscar(centroId, desdeFecha, hastaFecha, texto, metodoPago, estado, pageable), this::toDto);
+
+        java.util.Set<Long> sucursalesAutorizadas = null;
+        Long sucursalId = null;
+        Long usuarioId = null;
+        if (tenantScope.isSupervisorOSuperior(actor)) {
+            sucursalId = sucursalIdFiltro;
+            usuarioId = usuarioIdFiltro;
+        } else {
+            sucursalesAutorizadas = tenantScope.sucursalesPermitidas(actor);
+        }
+
+        return PageResponse.of(
+                ventaRepository.buscar(centroId, desdeFecha, hastaFecha, texto, metodoPago, estado, usuarioId, sucursalesAutorizadas, sucursalId, pageable),
+                this::toDto);
     }
 
     public Venta buscar(Long id) {
         return ventaRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Venta no encontrada"));
     }
 
+    /** Nunca devuelve una venta de otro centro, ni una fuera del alcance del actor (mismas
+     * reglas que listar()) -- evita que listar() sea la UNICA barrera y alguien vea el
+     * detalle de una venta ajena adivinando/incrementando el id. */
+    public Venta buscarEnAlcance(Usuario actor, Long id) {
+        Venta venta = buscar(id);
+        if (!venta.getCentro().getId().equals(tenantScope.scopeId(actor))) {
+            throw new ResourceNotFoundException("Venta no encontrada");
+        }
+        if (!tenantScope.isSupervisorOSuperior(actor)) {
+            Long sucursalVenta = venta.getSucursal() != null ? venta.getSucursal().getId() : null;
+            if (!tenantScope.sucursalPermite(actor, sucursalVenta)) {
+                throw new ResourceNotFoundException("Venta no encontrada");
+            }
+        }
+        return venta;
+    }
+
     @Transactional(readOnly = true)
-    public VentaDto obtener(Long id) {
-        return toDto(buscar(id));
+    public VentaDto obtener(Usuario actor, Long id) {
+        return toDto(buscarEnAlcance(actor, id));
     }
 
     @Transactional
@@ -85,7 +135,12 @@ public class VentaService {
 
         Venta venta = new Venta();
         venta.setCentro(centroRepository.getReferenceById(centroId));
-        venta.setUsuario(actor);
+        // getReferenceById (no el "actor" detached de @AuthenticationPrincipal): toDto() lee
+        // v.getUsuario().getSucursal() (lazy) para armar sucursalNombre -- sobre el actor
+        // detached eso revienta con LazyInitializationException (su sesion de carga ya cerro,
+        // ver TenantScope#fresh); esta referencia si queda ligada a la transaccion activa.
+        venta.setUsuario(usuarioRepository.getReferenceById(actor.getId()));
+        venta.setSucursal(sucursalParaVenta(actor));
         venta.setCorteCaja(corte);
         venta.setClienteNombre(request.clienteNombre());
         venta.setClienteEmail(request.clienteEmail());
@@ -199,7 +254,8 @@ public class VentaService {
 
         Venta venta = new Venta();
         venta.setCentro(centroRepository.getReferenceById(centroId));
-        venta.setUsuario(actor);
+        venta.setUsuario(usuarioRepository.getReferenceById(actor.getId()));
+        venta.setSucursal(sucursalParaVenta(actor));
         venta.setCorteCaja(corte);
         venta.setClienteNombre(apartado.getClienteNombre());
         venta.setClienteEmail(emailEfectivo);
@@ -295,7 +351,9 @@ public class VentaService {
                 i.getCantidad(), i.getDescuento(), i.getSubtotal()
         )).toList();
         return new VentaDto(
-                v.getId(), v.getCorteCaja().getId(), v.getUsuario().getNombre(), v.getClienteNombre(), v.getClienteEmail(),
+                v.getId(), v.getCorteCaja().getId(), v.getUsuario().getNombre(),
+                v.getSucursal() != null ? v.getSucursal().getNombre() : null,
+                v.getClienteNombre(), v.getClienteEmail(),
                 v.getSubtotal(), v.getDescuento(), v.getImpuesto(), v.getTotal(), v.getMontoRecibido(), v.getCambio(),
                 v.getMetodoPago().name(), v.getTipoTicket().name(), v.getEstado().name(), v.getNotas(), v.getCreatedAt(), items
         );
