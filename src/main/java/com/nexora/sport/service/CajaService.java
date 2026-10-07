@@ -25,7 +25,7 @@ import java.util.Set;
 public class CajaService {
 
     private static final String[] CATEGORIAS_INGRESO = {
-            "Inscripcion", "Mensualidad", "Clase particular", "Venta de producto", "Otro ingreso"
+            "Inscripcion", "Mensualidad", "Clase particular", "Venta de producto", "Anticipo de membresia", "Otro ingreso"
     };
     private static final String[] CATEGORIAS_EGRESO = {
             "Renta", "Luz", "Agua", "Internet", "Mantenimiento", "Material", "Limpieza",
@@ -251,6 +251,35 @@ public class CajaService {
         // cuenta (TenantScope#fresh), es seguro llamarlo directo con registradoPor.
         Long sucursalActiva = tenantScope.sucursalActivaId(registradoPor);
         if (sucursalActiva != null) m.setSucursal(sucursalRepository.getReferenceById(sucursalActiva));
+        return movimientoRepository.save(m);
+    }
+
+    /**
+     * Anticipo (20%) de un ApartadoPlan, pagado con tarjeta (simulado, ver seccion 41
+     * del encargo) desde la tienda publica -- sin login, por lo que no hay actor ni
+     * sucursal que resolver (registradoPor/sucursal quedan null, igual que cualquier
+     * movimiento "operado desde todas las sucursales"). La categoria se crea sola la
+     * primera vez que se usa (centros creados antes de este feature no la tienen sembrada).
+     */
+    @Transactional
+    public MovimientoFinanciero registrarIngresoDeApartadoPlan(Long centroId, ApartadoPlan apartadoPlan, BigDecimal monto) {
+        CategoriaMovimiento categoria = categoriaRepository.findByCentroIdAndNombreAndTipo(centroId, "Anticipo de membresia", TipoMovimiento.INGRESO)
+                .orElseGet(() -> {
+                    CategoriaMovimiento c = new CategoriaMovimiento();
+                    c.setCentro(centroRepository.getReferenceById(centroId));
+                    c.setNombre("Anticipo de membresia");
+                    c.setTipo(TipoMovimiento.INGRESO);
+                    c.setEsSistema(true);
+                    return categoriaRepository.save(c);
+                });
+        MovimientoFinanciero m = new MovimientoFinanciero();
+        m.setCentro(centroRepository.getReferenceById(centroId));
+        m.setCategoria(categoria);
+        m.setTipo(TipoMovimiento.INGRESO);
+        m.setMonto(monto);
+        m.setMetodoPago(MetodoPago.TARJETA);
+        m.setDescripcion("Anticipo de apartado de plan #" + apartadoPlan.getId() + " - " + apartadoPlan.getPlanNombreSnapshot()
+                + " - " + apartadoPlan.getClienteNombre());
         return movimientoRepository.save(m);
     }
 
