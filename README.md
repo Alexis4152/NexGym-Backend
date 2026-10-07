@@ -29,9 +29,9 @@ Tailwind) vive en `NexoraSport-Frontend`, en la carpeta hermana.
    Opcionalmente corre `init.sql` (`psql -U postgres -h localhost -p 5433 -d nexorasport -f init.sql`)
    como referencia/bootstrap explicito; si no lo corres, Hibernate crea el mismo
    esquema solo al arrancar la app.
-2. Variables de entorno relevantes (todas tienen default de desarrollo en
-   `application.properties`): `DB_URL`/`DB_USER`/`DB_PASSWORD`, `APP_JWT_SECRET`,
-   `APP_CORS_ORIGINS`, `APP_SEED_ADMIN_EMAIL`/`APP_SEED_ADMIN_PASSWORD`.
+2. Variables de entorno (ver tabla completa abajo; todas tienen default de
+   desarrollo en `application.properties`, asi que el arranque local funciona sin
+   configurar nada salvo que quieras correo real o cambiar la base de datos).
 3. `mvn spring-boot:run`. `DataSeeder` crea el rol y usuario `SUPER_ADMIN` si no
    existen.
 4. Inicia sesion con el super admin, cambia la contrasena cuando se pida, y crea tu
@@ -39,6 +39,42 @@ Tailwind) vive en `NexoraSport-Frontend`, en la carpeta hermana.
    Al crear el Centro se siembran solos sus roles de sistema (Dueno/Administrador/
    Recepcion/Entrenador), sus categorias de movimiento de Caja, y su sucursal por
    defecto.
+
+## Variables de entorno
+
+Ninguna vive en el repo: todas se leen de variables de entorno reales del sistema
+(`${VAR:default}` en `application.properties`), nunca de un archivo `.env` cargado
+automaticamente — Spring Boot no trae esa capacidad de fabrica. `.env.example` (en la
+raiz de este repo) las lista como referencia para copiar/pegar al exportarlas o al
+configurarlas en el panel de tu proveedor de hosting; `.gitignore` ya ignora cualquier
+`.env` real que crees localmente.
+
+Para desarrollo local no necesitas configurar nada: todas tienen un default seguro
+para localhost. Antes de desplegar a produccion, como minimo cambia `APP_JWT_SECRET`
+y `APP_SEED_ADMIN_PASSWORD` (los defaults dicen literalmente "dev-only"/"CambiaEsta").
+
+| Variable | Default (dev) | Para que sirve |
+|---|---|---|
+| `DB_URL` | `jdbc:postgresql://localhost:5433/nexorasport` | Cadena de conexion JDBC a Postgres |
+| `DB_USER` | `postgres` | Usuario de la base de datos |
+| `DB_PASSWORD` | `root123` | Password de la base de datos |
+| `APP_JWT_SECRET` | `dev-only-secret-...` | Firma de los access tokens JWT — **cambiar en produccion** |
+| `APP_JWT_ACCESS_MIN` | `30` | Minutos de vigencia del access token |
+| `APP_JWT_REFRESH_HOURS` | `8` | Horas de vigencia del refresh token (cookie httpOnly) |
+| `APP_COOKIE_SECURE` | `false` | `true` en produccion (HTTPS) para la cookie de refresh |
+| `APP_COOKIE_SAMESITE` | `Lax` | Politica SameSite de la cookie de refresh |
+| `APP_CORS_ORIGINS` | `http://localhost:5174` | Origen(es) permitidos para CORS (la URL del frontend) |
+| `APP_UPLOADS_DIR` | `uploads` | Carpeta donde se guardan logos/imagenes/comprobantes subidos |
+| `APP_MAIL_HOST` | `smtp.gmail.com` | Host SMTP para correo (reset de password, notificaciones) |
+| `APP_MAIL_PORT` | `587` | Puerto SMTP |
+| `APP_MAIL_USERNAME` | *(vacio)* | Cuenta SMTP — sin esto el envio de correo falla silenciosamente |
+| `APP_MAIL_PASSWORD` | *(vacio)* | Password/App Password de la cuenta SMTP (nunca la de la cuenta si es Gmail, usa un App Password) |
+| `APP_QZ_CERT_PATH` | `qz-keys/digital-certificate.txt` | Certificado para impresion termica via QZ Tray (carpeta ya ignorada por git) |
+| `APP_QZ_KEY_PATH` | `qz-keys/private-key.pem` | Llave privada para QZ Tray (idem) |
+| `APP_FRONTEND_URL` | `http://localhost:5174` | URL del frontend, usada en los links de los correos |
+| `APP_SEED_ADMIN_EMAIL` | `admin@nexorasport.com` | Correo del `SUPER_ADMIN` que crea `DataSeeder` al primer arranque |
+| `APP_SEED_ADMIN_PASSWORD` | `CambiaEsta123` | Password inicial del `SUPER_ADMIN` — **cambiar en produccion**, y de todas formas el sistema obliga a cambiarla en el primer login |
+| `PORT` | `8081` | Puerto HTTP del backend |
 
 ## Estructura (backend)
 
