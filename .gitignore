@@ -1,9 +1,14 @@
 target/
 uploads/
+backups/
+qz-keys/
 *.log
 .idea/
 *.iml
 .vscode/
+.DS_Store
+
+# Variables de entorno reales (solo se versiona el ejemplo)
 .env
-qz-keys/
-backups/
+.env.*
+!.env.example

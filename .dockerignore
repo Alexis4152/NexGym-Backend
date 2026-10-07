@@ -1,0 +1,15 @@
+target/
+uploads/
+qz-keys/
+backups/
+.git/
+.idea/
+.vscode/
+*.iml
+*.log
+.env
+.env.*
+*.sql
+README.md
+Dockerfile
+.dockerignore
