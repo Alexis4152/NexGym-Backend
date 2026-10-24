@@ -29,6 +29,12 @@ public class PagoMembresia {
     @JoinColumn(name = "membresia_id", nullable = false)
     private Membresia membresia;
 
+    /** Corte de caja (turno) en el que se cobro: su efectivo cuenta en el arqueo de ese corte.
+     * Null en el anticipo con tarjeta de la tienda en linea (no paso por ninguna caja). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "corte_caja_id")
+    private CorteCaja corteCaja;
+
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal monto;
 
@@ -38,6 +44,14 @@ public class PagoMembresia {
 
     @Column(nullable = false)
     private LocalDate fecha = LocalDate.now();
+
+    /** Solo efectivo: lo que entrego el cliente (puede ser mas que monto) y el cambio que se le
+     * dio. monto es lo que realmente se abona; estos dos solo van al ticket. Null en otros metodos. */
+    @Column(name = "monto_recibido", precision = 10, scale = 2)
+    private BigDecimal montoRecibido;
+
+    @Column(precision = 10, scale = 2)
+    private BigDecimal cambio;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

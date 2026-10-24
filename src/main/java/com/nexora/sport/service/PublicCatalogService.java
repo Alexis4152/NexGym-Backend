@@ -53,7 +53,8 @@ public class PublicCatalogService {
     public PublicCentroDto obtenerCentro(String slug) {
         Centro centro = resolverCentroApartados(slug);
         return new PublicCentroDto(centro.getNombre(), centro.getLogoUrl(), centro.getColorPrimario(),
-                centro.getTelefono(), centro.getDireccion(), centro.isApartadosActivo());
+                centro.getTelefono(), centro.getDireccion(), centro.getEmailContacto(),
+                centro.getHorasApartadoDefault(), centro.isApartadosActivo());
     }
 
     /** Agrupa por nombre (seccion 31 del encargo): ahora cada sucursal tiene su propio

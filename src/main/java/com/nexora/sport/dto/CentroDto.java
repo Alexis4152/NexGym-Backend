@@ -13,6 +13,8 @@ public record CentroDto(
         String telefono,
         String emailContacto,
         String direccion,
+        /** null mientras el dueno no capture el domicilio estructurado. */
+        DomicilioDto domicilio,
         boolean activo,
         boolean apartadosActivo,
         int horasApartadoDefault,
@@ -26,5 +28,7 @@ public record CentroDto(
         boolean notificacionesInternoActivo,
         String notificacionesDiasAntesVencimiento,
         Integer notificacionesHorasAntesClase,
-        LocalTime horaCierreAutomaticoCorte
+        LocalTime horaCierreAutomaticoCorte,
+        /** Conteo ciego del corte de caja (ver Centro#conteoCiego). */
+        boolean conteoCiego
 ) {}

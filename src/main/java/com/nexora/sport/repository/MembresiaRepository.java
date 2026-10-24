@@ -19,6 +19,8 @@ public interface MembresiaRepository extends JpaRepository<Membresia, Long> {
 
     List<Membresia> findByAlumnoIdAndEstado(Long alumnoId, EstadoMembresia estado);
 
+    List<Membresia> findByAlumnoIdOrderByFechaInicioDesc(Long alumnoId);
+
     long countByCentroIdAndEstado(Long centroId, EstadoMembresia estado);
 
     List<Membresia> findByCentroIdAndEstado(Long centroId, EstadoMembresia estado);

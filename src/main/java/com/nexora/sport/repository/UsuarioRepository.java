@@ -16,6 +16,9 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     boolean existsByEmail(String email);
     Page<Usuario> findByCentroIdAndDeletedAtIsNull(Long centroId, Pageable pageable);
 
+    /** Usuarios vigentes con un rol (no se elimina un rol que alguien sigue usando). */
+    long countByRolIdAndDeletedAtIsNull(Long rolId);
+
     @Query("select u from Usuario u where u.centro.id = :centroId and u.deletedAt is null and u.activo = true " +
            "and :seccion member of u.rol.secciones")
     List<Usuario> findActivosConSeccion(@Param("centroId") Long centroId, @Param("seccion") Seccion seccion);

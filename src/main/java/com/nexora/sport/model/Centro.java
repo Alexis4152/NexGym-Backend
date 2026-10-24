@@ -40,8 +40,12 @@ public class Centro {
     @Column(name = "email_contacto", length = 150)
     private String emailContacto;
 
+    /** Texto compuesto a partir de `domicilio` (lo leen tickets, tienda en linea, etc.). */
     @Column(length = 250)
     private String direccion;
+
+    @Embedded
+    private Domicilio domicilio;
 
     @Column(nullable = false)
     private boolean activo = true;
@@ -109,6 +113,12 @@ public class Centro {
      * horario). Null = desactivado, nadie se cierra solo. Ver CorteCajaAutoCloseJob. */
     @Column(name = "hora_cierre_automatico_corte")
     private LocalTime horaCierreAutomaticoCorte;
+
+    /** Conteo ciego (homologado con DemoPV#Tienda.blindCashCount): mientras el corte esta
+     * abierto, el cajero no ve su efectivo esperado; lo ve hasta despues de cerrar con su
+     * conteo. Dueno/Administrador siempre lo ven. Apagado por default. */
+    @Column(name = "conteo_ciego", nullable = false, columnDefinition = "boolean default false")
+    private boolean conteoCiego = false;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();

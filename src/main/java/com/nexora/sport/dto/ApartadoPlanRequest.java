@@ -7,7 +7,7 @@ import jakarta.validation.constraints.*;
 public record ApartadoPlanRequest(
         @NotNull Long planId,
         @NotBlank @Size(max = 150) String clienteNombre,
-        @NotBlank @Size(max = 30) String clienteTelefono,
+        @NotBlank @Pattern(regexp = "\\d{10}", message = "El telefono debe tener 10 digitos") String clienteTelefono,
         @NotBlank @Email @Size(max = 150) String clienteEmail,
         @Size(max = 500) String notas
 ) {}

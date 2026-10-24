@@ -31,13 +31,15 @@ public class VentaService {
     private final UsuarioRepository usuarioRepository;
     private final SucursalRepository sucursalRepository;
     private final TenantScope tenantScope;
+    private final BloqueoFilas bloqueoFilas;
 
     public VentaService(VentaRepository ventaRepository, CorteCajaRepository corteRepository,
                          ArticuloInventarioRepository articuloRepository, MovimientoInventarioRepository movimientoInventarioRepository,
                          CentroRepository centroRepository, CajaService cajaService, MailService mailService,
                          TicketPdfService ticketPdfService, EscPosTicketService escPosTicketService,
                          InventarioService inventarioService, UsuarioRepository usuarioRepository,
-                         SucursalRepository sucursalRepository, TenantScope tenantScope) {
+                         SucursalRepository sucursalRepository, TenantScope tenantScope, BloqueoFilas bloqueoFilas) {
+        this.bloqueoFilas = bloqueoFilas;
         this.ventaRepository = ventaRepository;
         this.corteRepository = corteRepository;
         this.articuloRepository = articuloRepository;
@@ -148,10 +150,21 @@ public class VentaService {
         venta.setTipoTicket(TipoTicket.valueOf(request.tipoTicket()));
         venta.setNotas(request.notas());
 
+        // Bloqueo de los articulos ANTES de leer su stock (homologado con DemoPV): dos ventas, o
+        // una venta y la confirmacion de un apartado, sobre la ultima pieza quedan en fila; la
+        // segunda lee el stock ya descontado y falla. Se valida el total por articulo, por si
+        // el mismo articulo viene en dos lineas del carrito.
+        java.util.Map<Long, ArticuloInventario> bloqueados = bloqueoFilas.bloquearEnOrden(ArticuloInventario.class,
+                request.items().stream().map(VentaRequest.ItemRequest::articuloId).toList(), "Articulo no encontrado");
+        java.util.Map<Long, Integer> pedidoPorArticulo = new java.util.HashMap<>();
+        request.items().forEach(ir -> pedidoPorArticulo.merge(ir.articuloId(), ir.cantidad(), Integer::sum));
+
         BigDecimal subtotal = BigDecimal.ZERO;
         for (VentaRequest.ItemRequest ir : request.items()) {
-            ArticuloInventario articulo = articuloRepository.findById(ir.articuloId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Articulo no encontrado"));
+            ArticuloInventario articulo = bloqueados.get(ir.articuloId());
+            if (articulo.getStock() < pedidoPorArticulo.get(ir.articuloId())) {
+                throw new IllegalStateException("Stock insuficiente para " + articulo.getNombre() + " (disponible: " + articulo.getStock() + ")");
+            }
             // Cada sucursal vende SOLO su propio inventario (seccion 31 del encargo): ver
             // otras sucursales es de lectura (InventarioService#buscarEnOtrasSucursales),
             // nunca una via para vender desde ahi.
@@ -310,12 +323,20 @@ public class VentaService {
         if (!com.nexora.sport.security.PermisoEvaluator.tiene(actor, com.nexora.sport.model.Permiso.VENTAS_CANCELAR)) {
             throw new IllegalStateException("No tienes permiso para cancelar ventas");
         }
-        Venta venta = buscar(id);
+        // Bloqueo de la venta: cancelarla dos veces a la vez devolveria el stock doble.
+        Venta venta = bloqueoFilas.bloquear(Venta.class, id, "Venta no encontrada");
+        if (!venta.getCentro().getId().equals(tenantScope.scopeId(actor))) {
+            throw new ResourceNotFoundException("Venta no encontrada");
+        }
         if (venta.getEstado() != EstadoVenta.COMPLETADA) {
             throw new IllegalStateException("Esta venta ya esta cancelada");
         }
+        java.util.Map<Long, ArticuloInventario> bloqueados = bloqueoFilas.bloquearEnOrden(ArticuloInventario.class,
+                venta.getItems().stream().map(i -> i.getArticulo() != null ? i.getArticulo().getId() : null).toList(),
+                "Articulo no encontrado");
         for (VentaItem item : venta.getItems()) {
-            ArticuloInventario articulo = item.getArticulo();
+            if (item.getArticulo() == null) continue;
+            ArticuloInventario articulo = bloqueados.get(item.getArticulo().getId());
             int anterior = articulo.getStock();
             int nuevo = anterior + item.getCantidad();
             articulo.setStock(nuevo);

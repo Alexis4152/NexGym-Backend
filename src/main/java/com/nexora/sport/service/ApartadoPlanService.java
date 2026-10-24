@@ -1,14 +1,18 @@
 package com.nexora.sport.service;
 
+import com.nexora.sport.dto.AlumnoDto;
+import com.nexora.sport.dto.AlumnoRequest;
 import com.nexora.sport.dto.ApartadoPlanCancelRequest;
 import com.nexora.sport.dto.ApartadoPlanDto;
 import com.nexora.sport.dto.ApartadoPlanRequest;
+import com.nexora.sport.dto.ConvertirApartadoPlanRequest;
 import com.nexora.sport.dto.PageResponse;
 import com.nexora.sport.dto.publico.PublicApartadoPlanResponseDto;
 import com.nexora.sport.exception.ResourceNotFoundException;
 import com.nexora.sport.model.*;
 import com.nexora.sport.repository.*;
 import com.nexora.sport.security.TenantScope;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,39 +22,51 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Apartado de un plan de membresia desde la tienda publica: el cliente paga un anticipo
  * del 20% con tarjeta (pago simulado, sin pasarela conectada todavia -- seccion 41 del
- * encargo) para reservar su lugar; el staff de Membresias completa despues el alta real
- * (Membresia) cuando el cliente se presenta. Mismo patron general que ApartadoService
- * (productos), pero sin descuento de stock/cupo: solo folio + anticipo ya cobrado.
+ * encargo) para reservar su lugar. Al presentarse, el staff lo CONVIERTE: liga el apartado
+ * a un alumno (existente o nuevo) y da de alta la Membresia real, con el anticipo ya
+ * registrado como su primer pago (sin volver a cobrarlo ni duplicarlo en Caja).
  */
 @Service
 public class ApartadoPlanService {
 
     private static final BigDecimal PORCENTAJE_ANTICIPO = new BigDecimal("0.20");
+    private static final int MAX_COINCIDENCIAS_ALUMNO = 8;
 
     private final ApartadoPlanRepository apartadoPlanRepository;
     private final MembresiaPlanRepository membresiaPlanRepository;
     private final MembresiaRepository membresiaRepository;
     private final CentroRepository centroRepository;
     private final UsuarioRepository usuarioRepository;
+    private final AlumnoRepository alumnoRepository;
     private final CajaService cajaService;
     private final MailService mailService;
+    private final AlumnoService alumnoService;
+    private final MembresiaService membresiaService;
+    private final NotificacionService notificacionService;
     private final TenantScope tenantScope;
 
     public ApartadoPlanService(ApartadoPlanRepository apartadoPlanRepository, MembresiaPlanRepository membresiaPlanRepository,
                                 MembresiaRepository membresiaRepository, CentroRepository centroRepository,
-                                UsuarioRepository usuarioRepository, CajaService cajaService, MailService mailService,
+                                UsuarioRepository usuarioRepository, AlumnoRepository alumnoRepository,
+                                CajaService cajaService, MailService mailService, AlumnoService alumnoService,
+                                MembresiaService membresiaService, NotificacionService notificacionService,
                                 TenantScope tenantScope) {
         this.apartadoPlanRepository = apartadoPlanRepository;
         this.membresiaPlanRepository = membresiaPlanRepository;
         this.membresiaRepository = membresiaRepository;
         this.centroRepository = centroRepository;
         this.usuarioRepository = usuarioRepository;
+        this.alumnoRepository = alumnoRepository;
         this.cajaService = cajaService;
         this.mailService = mailService;
+        this.alumnoService = alumnoService;
+        this.membresiaService = membresiaService;
+        this.notificacionService = notificacionService;
         this.tenantScope = tenantScope;
     }
 
@@ -94,8 +110,9 @@ public class ApartadoPlanService {
                     "Cliente: " + apartado.getClienteNombre() + " (" + apartado.getClienteTelefono() + ", " + apartado.getClienteEmail() + ")\n"
                             + "Plan: " + apartado.getPlanNombreSnapshot() + " ($" + apartado.getPrecioPlanSnapshot() + ")\n"
                             + "Anticipo pagado con tarjeta: $" + apartado.getMontoAnticipo() + "\n\n"
-                            + "Revisa la solicitud desde el panel de Apartados y da de alta su membresia cuando se presente.");
+                            + "Revisa la solicitud desde Apartados o Membresias y da de alta su membresia cuando se presente.");
         }
+        notificacionService.notificarApartadoPlanNuevo(apartado);
 
         return new PublicApartadoPlanResponseDto(apartado.getId(), apartado.getEstado().name(), apartado.getMontoAnticipo(),
                 apartado.getPrecioPlanSnapshot(), apartado.getSolicitadoEn());
@@ -112,18 +129,29 @@ public class ApartadoPlanService {
         return PageResponse.of(apartadoPlanRepository.buscar(centroId, estado, desdeFecha, hastaFecha, texto, pageable), this::toDto);
     }
 
-    public ApartadoPlan buscar(Long id) {
-        return apartadoPlanRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Apartado de plan no encontrado"));
+    /** Nunca devuelve un apartado de otro centro (evita adivinar ids ajenos). */
+    private ApartadoPlan buscarDelCentro(Long id, Usuario actor) {
+        ApartadoPlan apartado = apartadoPlanRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Apartado de plan no encontrado"));
+        if (!apartado.getCentro().getId().equals(tenantScope.scopeId(actor))) {
+            throw new ResourceNotFoundException("Apartado de plan no encontrado");
+        }
+        return apartado;
     }
 
     @Transactional(readOnly = true)
-    public ApartadoPlanDto obtener(Long id) {
-        return toDto(buscar(id));
+    public ApartadoPlanDto obtener(Long id, Usuario actor) {
+        return toDto(buscarDelCentro(id, actor));
+    }
+
+    @Transactional(readOnly = true)
+    public long contarPendientes(Usuario actor) {
+        return apartadoPlanRepository.countByCentroIdAndEstado(tenantScope.scopeId(actor), EstadoApartadoPlan.PENDIENTE);
     }
 
     @Transactional
     public ApartadoPlanDto cancelar(Long id, Usuario actor, ApartadoPlanCancelRequest request) {
-        ApartadoPlan apartado = buscar(id);
+        ApartadoPlan apartado = buscarDelCentro(id, actor);
         if (apartado.getEstado() != EstadoApartadoPlan.PENDIENTE) {
             throw new IllegalStateException("Este apartado ya fue procesado");
         }
@@ -143,19 +171,74 @@ public class ApartadoPlanService {
         return toDto(apartado);
     }
 
+    /**
+     * Alumnos que podrian ser el cliente de este apartado (mismo correo, telefono o nombre
+     * parecido), para que el staff lo ligue en vez de crear un duplicado.
+     */
+    @Transactional(readOnly = true)
+    public List<AlumnoDto> alumnosCoincidentes(Long id, Usuario actor) {
+        ApartadoPlan a = buscarDelCentro(id, actor);
+        String digitos = a.getClienteTelefono() == null ? "" : a.getClienteTelefono().replaceAll("\\D", "");
+        String telefono = digitos.length() >= 7 ? digitos.substring(Math.max(0, digitos.length() - 10)) : "";
+        String email = a.getClienteEmail() == null ? "" : a.getClienteEmail().trim();
+        // Por nombre solo con el primer nombre + primer apellido para no empatar de mas con
+        // nombres cortos tipo "Ana".
+        String[] partes = a.getClienteNombre().trim().split("\\s+");
+        String nombre = partes.length >= 2 ? partes[0] + " " + partes[1] : "";
+        return alumnoRepository.buscarCoincidencias(a.getCentro().getId(), email, telefono, nombre,
+                        PageRequest.of(0, MAX_COINCIDENCIAS_ALUMNO)).stream()
+                .map(alumnoService::toDto)
+                .toList();
+    }
+
+    /**
+     * Convierte el apartado: resuelve el alumno (existente o nuevo), da de alta la membresia
+     * con el anticipo como primer pago y deja el apartado CONVERTIDO y ligado a ambos.
+     */
     @Transactional
-    public ApartadoPlanDto convertir(Long id, Usuario actor) {
-        ApartadoPlan apartado = buscar(id);
+    public ApartadoPlanDto convertir(Long id, Usuario actor, ConvertirApartadoPlanRequest request) {
+        ApartadoPlan apartado = buscarDelCentro(id, actor);
         if (apartado.getEstado() != EstadoApartadoPlan.PENDIENTE) {
             throw new IllegalStateException("Este apartado ya fue procesado");
         }
+        boolean existente = request.alumnoId() != null;
+        if (existente == (request.nuevoAlumno() != null)) {
+            throw new IllegalArgumentException("Selecciona un alumno existente o captura los datos del alumno nuevo");
+        }
+
+        Alumno alumno;
+        if (existente) {
+            alumno = alumnoRepository.findById(request.alumnoId())
+                    .filter(al -> al.getDeletedAt() == null && al.getCentro().getId().equals(apartado.getCentro().getId()))
+                    .orElseThrow(() -> new ResourceNotFoundException("Alumno no encontrado"));
+        } else {
+            ConvertirApartadoPlanRequest.NuevoAlumno n = request.nuevoAlumno();
+            Set<Long> disciplinasInteres = request.disciplinaIds() != null ? request.disciplinaIds() : Set.of();
+            AlumnoDto creado = alumnoService.crear(actor, new AlumnoRequest(
+                    n.nombre().trim(), n.fechaNacimiento(), blankToNull(n.telefono()), blankToNull(n.email()),
+                    null, null, "Alta desde apartado en linea #" + apartado.getId(), null,
+                    disciplinasInteres, n.sucursalId()));
+            alumno = alumnoRepository.findById(creado.id()).orElseThrow();
+        }
+
+        Membresia membresia = membresiaService.crearDesdeApartadoPlan(actor, alumno, apartado.getPlan(),
+                request.fechaInicio(), request.descuento(), request.disciplinaIds(),
+                apartado.getMontoAnticipo(), apartado.getMovimientoFinancieroId(),
+                request.montoPagoAdicional(), request.metodoPago(), request.sucursalPreferidaId());
+
         apartado.setEstado(EstadoApartadoPlan.CONVERTIDO);
         apartado.setConvertidoPor(actor);
         apartado.setConvertidoEn(LocalDateTime.now());
+        apartado.setAlumno(alumno);
+        apartado.setMembresiaId(membresia.getId());
         return toDto(apartadoPlanRepository.save(apartado));
     }
 
     // ---------------------------------------------------------------- helpers
+    private static String blankToNull(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
+    }
+
     private List<Usuario> staffParaNotificar(Long centroId) {
         return usuarioRepository.findActivosConSeccion(centroId, Seccion.MEMBRESIAS).stream()
                 .filter(u -> u.getEmail() != null && !u.getEmail().isBlank())
@@ -165,10 +248,14 @@ public class ApartadoPlanService {
     public ApartadoPlanDto toDto(ApartadoPlan a) {
         return new ApartadoPlanDto(
                 a.getId(), a.getClienteNombre(), a.getClienteTelefono(), a.getClienteEmail(), a.getNotas(),
-                a.getEstado().name(), a.getPlanNombreSnapshot(), a.getPrecioPlanSnapshot(), a.getMontoAnticipo(),
+                a.getEstado().name(), a.getPlan() != null ? a.getPlan().getId() : null,
+                a.getPlanNombreSnapshot(), a.getPrecioPlanSnapshot(), a.getMontoAnticipo(),
                 a.getSolicitadoEn(),
                 a.getConvertidoPor() != null ? a.getConvertidoPor().getNombre() : null, a.getConvertidoEn(),
-                a.getCanceladoPor() != null ? a.getCanceladoPor().getNombre() : null, a.getCanceladoEn(), a.getMotivoCancelacion()
+                a.getCanceladoPor() != null ? a.getCanceladoPor().getNombre() : null, a.getCanceladoEn(), a.getMotivoCancelacion(),
+                a.getAlumno() != null ? a.getAlumno().getId() : null,
+                a.getAlumno() != null ? a.getAlumno().getNombre() : null,
+                a.getMembresiaId()
         );
     }
 }

@@ -10,6 +10,7 @@ public record ApartadoPlanDto(
         String clienteEmail,
         String notas,
         String estado,
+        Long planId,
         String planNombre,
         BigDecimal precioPlan,
         BigDecimal montoAnticipo,
@@ -18,5 +19,9 @@ public record ApartadoPlanDto(
         LocalDateTime convertidoEn,
         String canceladoPorNombre,
         LocalDateTime canceladoEn,
-        String motivoCancelacion
+        String motivoCancelacion,
+        /** Alumno/membresia a los que quedo ligado al convertirse (null si sigue PENDIENTE). */
+        Long alumnoId,
+        String alumnoNombre,
+        Long membresiaId
 ) {}

@@ -33,12 +33,15 @@ public class InventarioService {
     private final ImagenArticuloRepository imagenArticuloRepository;
     private final TenantScope tenantScope;
     private final NotificacionService notificacionService;
+    private final BloqueoFilas bloqueoFilas;
 
     public InventarioService(ArticuloInventarioRepository articuloRepository, CategoriaInventarioRepository categoriaRepository,
                               MovimientoInventarioRepository movimientoRepository, DisciplinaRepository disciplinaRepository,
                               CentroRepository centroRepository, SucursalRepository sucursalRepository,
                               ImagenArticuloRepository imagenArticuloRepository,
-                              TenantScope tenantScope, NotificacionService notificacionService) {
+                              TenantScope tenantScope, NotificacionService notificacionService,
+                              BloqueoFilas bloqueoFilas) {
+        this.bloqueoFilas = bloqueoFilas;
         this.articuloRepository = articuloRepository;
         this.categoriaRepository = categoriaRepository;
         this.movimientoRepository = movimientoRepository;
@@ -209,6 +212,7 @@ public class InventarioService {
     @Transactional
     public ArticuloInventarioDto actualizar(Usuario actor, Long id, ArticuloInventarioRequest request) {
         ArticuloInventario a = buscarEnAlcance(actor, id);
+        a = bloqueoFilas.bloquear(ArticuloInventario.class, a.getId(), "Articulo no encontrado");
         validarCodigoBarrasUnico(a.getCentro().getId(), request.codigoBarras(), id);
         aplicar(a, request);
         return toDto(articuloRepository.save(a));
@@ -239,6 +243,9 @@ public class InventarioService {
             throw new IllegalStateException("No tienes permiso para agregar piezas al inventario");
         }
         ArticuloInventario a = buscarEnAlcance(actor, id);
+        // Bloquear y releer: un ajuste a la vez sobre el mismo articulo, y nunca sobre un stock que
+        // una venta/apartado concurrente ya cambio (homologado con DemoPV).
+        a = bloqueoFilas.bloquear(ArticuloInventario.class, a.getId(), "Articulo no encontrado");
         int anterior = a.getStock();
         int nuevo = anterior + request.delta();
         if (nuevo < 0) throw new IllegalArgumentException("El stock no puede quedar negativo");

@@ -618,6 +618,19 @@ CREATE TABLE IF NOT EXISTS notificacion_envios (
     created_at          TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+-- Cuenta SMTP global (una sola fila, la siembra MailConfigDataInitializer al arrancar).
+-- smtp_password va cifrada (AES-GCM con APP_ENCRYPTION_KEY, ver EncryptedStringConverter).
+CREATE TABLE IF NOT EXISTS mail_config (
+    id              BIGSERIAL PRIMARY KEY,
+    enabled         BOOLEAN NOT NULL DEFAULT FALSE,
+    smtp_host       VARCHAR(150) NOT NULL,
+    smtp_port       INTEGER NOT NULL,
+    smtp_username   VARCHAR(150),
+    smtp_password   VARCHAR(255),
+    updated_at      TIMESTAMP,
+    updated_by      BIGINT REFERENCES usuarios(id)
+);
+
 -- ============================================================
 --  Indices (los que ya existen hoy en la BD, ademas de los implicitos de cada
 --  PRIMARY KEY/UNIQUE declarado arriba)

@@ -39,6 +39,13 @@ public enum TipoNotificacion {
     ADMIN_ALUMNO_NUEVO,
     /** Solo Dueno/Encargado (ver Notificacion#seccionObjetivo=CAJA + nivel Encargado+ en NotificacionService). */
     EGRESO_PENDIENTE_APROBACION,
+    // Apartados de la tienda publica (seccionObjetivo=TIENDA: SUPER_ADMIN, Dueno, Administrador,
+    // Recepcion y Caja/Ventas -- Entrenador/Encargado de Inventario no tienen esa seccion).
+    // OJO: la BD tiene un CHECK sobre notificaciones.tipo que se regenera al arrancar
+    // (ver NotificacionTipoCheckMigration) -- agregar un valor aqui no requiere SQL a mano.
+    ADMIN_APARTADO_NUEVO,
+    ADMIN_APARTADO_PLAN_NUEVO,
+    ADMIN_APARTADO_CANCELADO_CLIENTE,
 
     // Entrenador (destinatarioTipo=INSTRUCTOR: email a Instructor.email siempre, y bandeja
     // en-app si Instructor.usuario esta ligado)

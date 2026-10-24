@@ -12,6 +12,8 @@ import com.nexora.sport.repository.CorteCajaRepository;
 import com.nexora.sport.repository.MembresiaPlanRepository;
 import com.nexora.sport.repository.MembresiaRepository;
 import com.nexora.sport.repository.PagoMembresiaRepository;
+import com.nexora.sport.repository.SucursalRepository;
+import com.nexora.sport.dto.InicioMembresiaDto;
 import com.nexora.sport.security.TenantScope;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -24,6 +26,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -42,12 +45,20 @@ public class MembresiaService {
     private final CorteCajaRepository corteCajaRepository;
     private final TenantScope tenantScope;
     private final NotificacionService notificacionService;
+    private final InicioMembresiaService inicioMembresiaService;
+    private final SucursalRepository sucursalRepository;
+    private final EscPosTicketService escPosTicketService;
 
     public MembresiaService(MembresiaRepository membresiaRepository, MembresiaPlanRepository planRepository,
                              AlumnoRepository alumnoRepository, CentroRepository centroRepository,
                              PagoMembresiaRepository pagoMembresiaRepository, PagoMembresiaService pagoMembresiaService,
                              CorteCajaRepository corteCajaRepository,
-                             TenantScope tenantScope, NotificacionService notificacionService) {
+                             TenantScope tenantScope, NotificacionService notificacionService,
+                             InicioMembresiaService inicioMembresiaService, SucursalRepository sucursalRepository,
+                             EscPosTicketService escPosTicketService) {
+        this.escPosTicketService = escPosTicketService;
+        this.inicioMembresiaService = inicioMembresiaService;
+        this.sucursalRepository = sucursalRepository;
         this.membresiaRepository = membresiaRepository;
         this.planRepository = planRepository;
         this.alumnoRepository = alumnoRepository;
@@ -97,6 +108,7 @@ public class MembresiaService {
         BigDecimal descuento = validarDescuento(request.descuento(), plan.getPrecio());
 
         Membresia m = construirMembresia(centroId, alumno, plan, inicio, descuento, request.disciplinaIds(), null);
+        aplicarReglaDeInicioSiAplica(m, centroId, request.fechaInicio(), request.sucursalPreferidaId());
         m = membresiaRepository.save(m);
 
         registrarPagoInicialSiAplica(actor, centroId, m, request.montoPagoInicial(), request.metodoPago());
@@ -106,6 +118,153 @@ public class MembresiaService {
             notificacionService.notificarAdminPlanLleno(plan);
         }
         return toDto(m);
+    }
+
+    /**
+     * Alta de la membresia real al convertir un apartado de plan de la tienda publica (ver
+     * ApartadoPlanService#convertir). Mismas reglas que crear(), salvo que:
+     *  - el anticipo ya cobrado se registra como primer pago SIN volver a pasar por Caja
+     *    (PagoMembresiaService#registrarAnticipoApartado);
+     *  - el corte de caja abierto solo se exige si ademas se cobra algo en mostrador
+     *    (montoPagoAdicional), porque solo eso genera un ingreso nuevo.
+     */
+    /**
+     * Regla de inicio por disponibilidad de clases (InicioMembresiaService). Solo aplica a
+     * altas "de hoy" (sin fecha o con fecha <= hoy): si el staff eligio a proposito una fecha
+     * futura (p. ej. empezar el 1o de mes), se respeta tal cual.
+     */
+    private void aplicarReglaDeInicioSiAplica(Membresia m, Long centroId, LocalDate fechaSolicitada, Long sucursalPreferidaId) {
+        if (fechaSolicitada != null && fechaSolicitada.isAfter(LocalDate.now())) return;
+        InicioMembresiaDto inicio = inicioMembresiaService.calcular(centroId, m.getPlan(), m.getDisciplinas(),
+                resolverSucursalPreferida(centroId, m.getAlumno(), sucursalPreferidaId));
+        m.setFechaInicio(inicio.fechaInicio());
+        m.setFechaFin(calcularFin(m.getPlan(), inicio.fechaInicio()));
+        m.setFechaInicioAnticipable(inicio.fechaInicioAnticipable());
+        m.setEstado(EstadoMembresia.PENDIENTE);
+    }
+
+    /** Sucursal elegida en el formulario, o la sucursal del alumno; null = cualquiera del centro. */
+    private Sucursal resolverSucursalPreferida(Long centroId, Alumno alumno, Long sucursalPreferidaId) {
+        if (sucursalPreferidaId != null) {
+            return sucursalRepository.findById(sucursalPreferidaId)
+                    .filter(s -> s.getCentro().getId().equals(centroId))
+                    .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada"));
+        }
+        return alumno.getSucursal();
+    }
+
+    /** Vista previa para el formulario: como arrancaria una membresia de este plan si se da de alta ahora. */
+    @Transactional(readOnly = true)
+    public InicioMembresiaDto previsualizarInicio(Usuario actor, Long alumnoId, Long planId, Set<Long> disciplinaIds,
+                                                  Long sucursalPreferidaId) {
+        Long centroId = tenantScope.scopeId(actor);
+        MembresiaPlan plan = buscarPlanDelCentro(planId, centroId);
+        Alumno alumno = alumnoId != null ? buscarAlumnoDelCentro(alumnoId, centroId) : null;
+        Set<Disciplina> elegidas = plan.getDisciplinas().stream()
+                .filter(d -> disciplinaIds != null && disciplinaIds.contains(d.getId()))
+                .collect(Collectors.toSet());
+        Sucursal sucursal = sucursalPreferidaId != null || alumno != null
+                ? resolverSucursalPreferida(centroId, alumno, sucursalPreferidaId)
+                : null;
+        return inicioMembresiaService.calcular(centroId, plan, elegidas, sucursal);
+    }
+
+    /**
+     * Membresia con la que se registra una asistencia hoy (ver AsistenciaService). Busca entre
+     * las del alumno una que cubra la disciplina: ACTIVA y dentro de su vigencia, o PENDIENTE
+     * comprada hoy con clase disponible (fechaInicioAnticipable = hoy), que en ese caso ARRANCA
+     * en este momento. Si no hay ninguna, el mensaje explica por que.
+     */
+    @Transactional
+    public Membresia resolverParaAsistencia(Alumno alumno, Disciplina disciplina) {
+        LocalDate hoy = LocalDate.now();
+        List<Membresia> todas = membresiaRepository.findByAlumnoIdOrderByFechaInicioDesc(alumno.getId());
+        List<Membresia> cubren = todas.stream().filter(m -> cubreDisciplina(m, disciplina)).toList();
+
+        Optional<Membresia> activa = cubren.stream()
+                .filter(m -> m.getEstado() == EstadoMembresia.ACTIVA)
+                .filter(m -> !m.getFechaInicio().isAfter(hoy) && (m.getFechaFin() == null || !m.getFechaFin().isBefore(hoy)))
+                .filter(m -> m.getClasesRestantes() == null || m.getClasesRestantes() > 0)
+                .findFirst();
+        if (activa.isPresent()) return activa.get();
+
+        Optional<Membresia> arrancaHoy = cubren.stream()
+                .filter(m -> m.getEstado() == EstadoMembresia.PENDIENTE && hoy.equals(m.getFechaInicioAnticipable()))
+                .findFirst();
+        if (arrancaHoy.isPresent()) {
+            Membresia m = arrancaHoy.get();
+            m.setFechaInicio(hoy);
+            m.setFechaFin(calcularFin(m.getPlan(), hoy));
+            m.setFechaInicioAnticipable(null);
+            m.setEstado(EstadoMembresia.ACTIVA);
+            return membresiaRepository.save(m);
+        }
+
+        String nombreDisc = disciplina != null ? " de " + disciplina.getNombre() : "";
+        if (todas.isEmpty()) {
+            throw new IllegalStateException(alumno.getNombre() + " no tiene ninguna membresía registrada");
+        }
+        if (cubren.isEmpty()) {
+            throw new IllegalStateException("La membresía de " + alumno.getNombre() + " no incluye clases" + nombreDisc);
+        }
+        Optional<Membresia> pendiente = cubren.stream().filter(m -> m.getEstado() == EstadoMembresia.PENDIENTE).findFirst();
+        if (pendiente.isPresent()) {
+            throw new IllegalStateException("La membresía de " + alumno.getNombre() + " todavía no empieza: arranca el "
+                    + pendiente.get().getFechaInicio());
+        }
+        if (cubren.stream().anyMatch(m -> m.getEstado() == EstadoMembresia.SUSPENDIDA)) {
+            throw new IllegalStateException("La membresía de " + alumno.getNombre() + " está suspendida");
+        }
+        if (cubren.stream().anyMatch(m -> m.getEstado() == EstadoMembresia.ACTIVA && m.getClasesRestantes() != null && m.getClasesRestantes() <= 0)) {
+            throw new IllegalStateException(alumno.getNombre() + " ya usó todas las clases de su membresía");
+        }
+        throw new IllegalStateException(alumno.getNombre() + " no tiene una membresía vigente" + nombreDisc);
+    }
+
+    /** Descuenta una clase en planes por numero de clases (null = sin limite de clases). */
+    public void descontarClase(Membresia m) {
+        if (m.getClasesRestantes() == null) return;
+        m.setClasesRestantes(m.getClasesRestantes() - 1);
+        membresiaRepository.save(m);
+        if (m.getClasesRestantes() <= 0) notificacionService.notificarAdminMembresiaAgotada(m);
+    }
+
+    private boolean cubreDisciplina(Membresia m, Disciplina d) {
+        if (d == null) return true;
+        Set<Long> permitidas = InicioMembresiaService.disciplinasPermitidas(m.getPlan(), m.getDisciplinas());
+        return permitidas == null || permitidas.contains(d.getId());
+    }
+
+    @Transactional
+    public Membresia crearDesdeApartadoPlan(Usuario actor, Alumno alumno, MembresiaPlan plan, LocalDate fechaInicio,
+                                            BigDecimal descuentoSolicitado, Set<Long> disciplinaIds,
+                                            BigDecimal anticipo, Long movimientoAnticipoId,
+                                            BigDecimal montoPagoAdicional, String metodoPago,
+                                            Long sucursalPreferidaId) {
+        boolean cobraEnMostrador = montoPagoAdicional != null && montoPagoAdicional.compareTo(BigDecimal.ZERO) > 0;
+        if (cobraEnMostrador) assertCorteAbierto(actor);
+        Long centroId = tenantScope.scopeId(actor);
+        if (!plan.getCentro().getId().equals(centroId) || !plan.isActivo()) {
+            throw new IllegalStateException("El plan \"" + plan.getNombre() + "\" ya no esta activo; no se puede dar de alta");
+        }
+        assertCupoDisponible(plan);
+
+        LocalDate inicio = fechaInicio != null ? fechaInicio : LocalDate.now();
+        BigDecimal descuento = validarDescuento(descuentoSolicitado, plan.getPrecio());
+        Membresia m = construirMembresia(centroId, alumno, plan, inicio, descuento, disciplinaIds, null);
+        aplicarReglaDeInicioSiAplica(m, centroId, fechaInicio, sucursalPreferidaId);
+        m = membresiaRepository.save(m);
+
+        pagoMembresiaService.registrarAnticipoApartado(actor, m, anticipo, movimientoAnticipoId);
+        if (cobraEnMostrador) {
+            pagoMembresiaService.registrarPagoConRecibido(actor, centroId, m, montoPagoAdicional, metodoPago);
+        }
+        notificacionService.notificarMembresiaNueva(m);
+        notificacionService.notificarAdminMembresiaNueva(m);
+        if (plan.getLimiteAlumnos() != null && membresiaRepository.countVigentesPorPlan(plan.getId()) >= plan.getLimiteAlumnos()) {
+            notificacionService.notificarAdminPlanLleno(plan);
+        }
+        return m;
     }
 
     @Transactional
@@ -196,6 +355,16 @@ public class MembresiaService {
 
     public Membresia buscar(Long id) {
         return membresiaRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Membresia no encontrada"));
+    }
+
+    /** Ticket ESC/POS (hex) de la membresia, para la impresora termica via QZ Tray. */
+    @Transactional(readOnly = true)
+    public String ticketEscPos(Usuario actor, Long id) {
+        Membresia m = buscarDelCentro(id, tenantScope.scopeId(actor));
+        List<PagoMembresia> pagos = pagoMembresiaRepository.findByMembresiaIdOrderByFechaDescCreatedAtDesc(m.getId()).stream()
+                .filter(p -> p.getEstado() == EstadoPago.VALIDO)
+                .toList();
+        return escPosTicketService.buildMembresia(m, pagos, pagoMembresiaService.calcularSaldo(m));
     }
 
     private Membresia buscarDelCentro(Long id, Long centroId) {
@@ -303,7 +472,7 @@ public class MembresiaService {
 
     private void registrarPagoInicialSiAplica(Usuario actor, Long centroId, Membresia m, BigDecimal montoPagoInicial, String metodoPago) {
         if (montoPagoInicial != null && montoPagoInicial.compareTo(BigDecimal.ZERO) > 0) {
-            pagoMembresiaService.registrarPagoInterno(actor, centroId, m, montoPagoInicial, metodoPago);
+            pagoMembresiaService.registrarPagoConRecibido(actor, centroId, m, montoPagoInicial, metodoPago);
         }
     }
 
@@ -377,7 +546,7 @@ public class MembresiaService {
                 m.getPrecioOriginal(), m.getDescuento(), m.getPrecioFinal(), totalPagado, saldo,
                 m.getEstado().name(), diasParaVencer, indicadores,
                 m.getMembresiaAnterior() != null ? m.getMembresiaAnterior().getId() : null, renovada,
-                m.getSuspendidaMotivo(), m.getCanceladaMotivo()
+                m.getSuspendidaMotivo(), m.getCanceladaMotivo(), m.getFechaInicioAnticipable()
         );
     }
 }

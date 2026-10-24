@@ -1,8 +1,10 @@
 package com.nexora.sport.service;
 
+import com.nexora.sport.dto.DomicilioDto;
 import com.nexora.sport.dto.PageResponse;
 import com.nexora.sport.dto.SucursalDto;
 import com.nexora.sport.dto.SucursalRequest;
+import com.nexora.sport.exception.FieldConflictException;
 import com.nexora.sport.exception.ResourceNotFoundException;
 import com.nexora.sport.model.Centro;
 import com.nexora.sport.model.Sucursal;
@@ -25,11 +27,14 @@ public class SucursalService {
     private final SucursalRepository sucursalRepository;
     private final CentroRepository centroRepository;
     private final TenantScope tenantScope;
+    private final CodigoPostalService codigoPostalService;
 
-    public SucursalService(SucursalRepository sucursalRepository, CentroRepository centroRepository, TenantScope tenantScope) {
+    public SucursalService(SucursalRepository sucursalRepository, CentroRepository centroRepository, TenantScope tenantScope,
+                           CodigoPostalService codigoPostalService) {
         this.sucursalRepository = sucursalRepository;
         this.centroRepository = centroRepository;
         this.tenantScope = tenantScope;
+        this.codigoPostalService = codigoPostalService;
     }
 
     /** Un Admin/Operativo solo ve las sucursales que tiene asignadas (su "hogar" +
@@ -107,12 +112,32 @@ public class SucursalService {
     }
 
     private void aplicar(Sucursal s, SucursalRequest request) {
+        if (codigoPostalService.esInexistente(request.domicilio().codigoPostal())) {
+            throw new FieldConflictException("domicilio.codigoPostal", "Ese codigo postal no existe en el catalogo de SEPOMEX");
+        }
         s.setNombre(request.nombre());
-        s.setDireccion(request.direccion());
+        s.setDomicilio(request.domicilio().aEntidad());
+        s.setDireccion(s.getDomicilio().formatear(300));
         s.setNotas(request.notas());
     }
 
+    /** La "Sucursal Principal" sembrada al crear el centro nace sin domicilio: cuando el dueno
+     * captura el del centro, se le copia mientras siga vacio (asi la tienda en linea ya puede
+     * mostrar donde recoger). */
+    @Transactional
+    public void heredarDomicilioDelCentro(Centro centro) {
+        if (centro.getDomicilio() == null || centro.getDomicilio().estaVacio()) return;
+        for (Sucursal s : sucursalRepository.findByCentroIdAndActivoTrueOrderByNombre(centro.getId())) {
+            if (NOMBRE_SUCURSAL_PRINCIPAL.equals(s.getNombre()) && (s.getDomicilio() == null || s.getDomicilio().estaVacio())) {
+                s.setDomicilio(centro.getDomicilio().copia());
+                s.setDireccion(s.getDomicilio().formatear(300));
+                sucursalRepository.save(s);
+            }
+        }
+    }
+
     public SucursalDto toDto(Sucursal s) {
-        return new SucursalDto(s.getId(), s.getNombre(), s.getDireccion(), s.getNotas(), s.isActivo());
+        return new SucursalDto(s.getId(), s.getNombre(), s.getDireccion(), DomicilioDto.de(s.getDomicilio()),
+                s.getNotas(), s.isActivo());
     }
 }

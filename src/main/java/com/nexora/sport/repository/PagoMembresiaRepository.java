@@ -20,6 +20,11 @@ public interface PagoMembresiaRepository extends JpaRepository<PagoMembresia, Lo
 
     long countByMembresiaIdAndEstado(Long membresiaId, EstadoPago estado);
 
+    /** [metodoPago, count, suma] de los pagos VALIDOS cobrados en un corte de caja (arqueo). */
+    @Query("select p.metodoPago, count(p), coalesce(sum(p.monto), 0) from PagoMembresia p " +
+           "where p.corteCaja.id = :corteId and p.estado = com.nexora.sport.model.EstadoPago.VALIDO group by p.metodoPago")
+    List<Object[]> sumarPorCorte(@Param("corteId") Long corteId);
+
     /** Total pagado por membresia, en un solo query (evita N+1 al listar cartera de muchas membresias). */
     @Query("select p.membresia.id, coalesce(sum(p.monto), 0) from PagoMembresia p " +
            "where p.membresia.id in :membresiaIds and p.estado = com.nexora.sport.model.EstadoPago.VALIDO " +

@@ -170,6 +170,47 @@ public class CajaService {
         return toDto(m);
     }
 
+    /**
+     * Egreso del libro de Caja que genera un GASTO pagado con efectivo del cajon durante un
+     * corte (ver MovimientoEfectivoService). Misma regla que un egreso manual: con comprobante
+     * nace APROBADO, sin el queda PENDIENTE de aprobacion (y avisa a quien aprueba). El
+     * comprobante ya viene subido (ruta publica), no como archivo.
+     */
+    @Transactional
+    public MovimientoFinanciero registrarEgresoDeCorte(Usuario actor, Long centroId, Long categoriaId, BigDecimal monto,
+                                                       String descripcion, String comprobanteUrl, Sucursal sucursal) {
+        if (categoriaId == null) throw new IllegalArgumentException("Elige la categoria del gasto");
+        CategoriaMovimiento categoria = categoriaRepository.findById(categoriaId)
+                .filter(c -> c.getCentro() == null || c.getCentro().getId().equals(centroId))
+                .orElseThrow(() -> new ResourceNotFoundException("Categoria no encontrada"));
+        if (categoria.getTipo() != TipoMovimiento.EGRESO) {
+            throw new IllegalArgumentException("La categoria seleccionada no es de egreso");
+        }
+        MovimientoFinanciero m = new MovimientoFinanciero();
+        m.setCentro(centroRepository.getReferenceById(centroId));
+        m.setCategoria(categoria);
+        m.setTipo(TipoMovimiento.EGRESO);
+        m.setMonto(monto);
+        m.setMetodoPago(MetodoPago.EFECTIVO);
+        m.setDescripcion(descripcion);
+        m.setFecha(LocalDate.now());
+        m.setRegistradoPor(actor);
+        m.setSucursal(sucursal);
+        if (comprobanteUrl != null && !comprobanteUrl.isBlank()) {
+            m.setComprobanteUrl(comprobanteUrl);
+            m.setEstadoAprobacion(EstadoAprobacion.APROBADO);
+            m.setResueltoPor(actor);
+            m.setResueltoEn(LocalDateTime.now());
+        } else {
+            m.setEstadoAprobacion(EstadoAprobacion.PENDIENTE);
+        }
+        m = movimientoRepository.save(m);
+        if (m.getEstadoAprobacion() == EstadoAprobacion.PENDIENTE) {
+            notificacionService.notificarEgresoPendienteAprobacion(m);
+        }
+        return m;
+    }
+
     private void aplicarComprobante(MovimientoFinanciero m, MultipartFile comprobante) {
         String ruta = fileStorageService.guardar("egresos-comprobantes", m.getId(), comprobante,
                 COMPROBANTE_TIPOS_PERMITIDOS, COMPROBANTE_TAMANIO_MAXIMO);

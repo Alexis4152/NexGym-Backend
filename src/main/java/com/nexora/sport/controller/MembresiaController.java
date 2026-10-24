@@ -50,6 +50,16 @@ public class MembresiaController {
         return ApiResponse.ok(membresiaService.proximasAVencer(actor, dias));
     }
 
+    /** Como arrancaria la vigencia si se da de alta ahora (hay clase disponible hoy o no). */
+    @GetMapping("/inicio-previsto")
+    public ApiResponse<InicioMembresiaDto> inicioPrevisto(@AuthenticationPrincipal Usuario actor,
+                                                          @RequestParam Long planId,
+                                                          @RequestParam(required = false) Long alumnoId,
+                                                          @RequestParam(required = false) java.util.Set<Long> disciplinaIds,
+                                                          @RequestParam(required = false) Long sucursalId) {
+        return ApiResponse.ok(membresiaService.previsualizarInicio(actor, alumnoId, planId, disciplinaIds, sucursalId));
+    }
+
     @PostMapping
     public ApiResponse<MembresiaDto> crear(@AuthenticationPrincipal Usuario actor, @Valid @RequestBody MembresiaRequest request) {
         return ApiResponse.ok("Membresia registrada", membresiaService.crear(actor, request));
@@ -76,6 +86,12 @@ public class MembresiaController {
     public ApiResponse<MembresiaDto> cancelar(@AuthenticationPrincipal Usuario actor, @PathVariable Long id,
                                                @Valid @RequestBody MembresiaMotivoRequest request) {
         return ApiResponse.ok("Membresia cancelada", membresiaService.cancelar(actor, id, request.motivo()));
+    }
+
+    /** Ticket de la membresia para la impresora termica (ESC/POS en hex, igual que ventas). */
+    @GetMapping("/{id}/ticket-escpos")
+    public ApiResponse<String> ticketEscPos(@AuthenticationPrincipal Usuario actor, @PathVariable Long id) {
+        return ApiResponse.ok(membresiaService.ticketEscPos(actor, id));
     }
 
     @GetMapping("/{id}/pagos")

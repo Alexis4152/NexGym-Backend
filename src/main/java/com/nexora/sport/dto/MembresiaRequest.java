@@ -17,5 +17,7 @@ public record MembresiaRequest(
         BigDecimal descuento,
         /** Pago inicial opcional (0/null = queda toda la deuda como saldo, solo permitido si el plan permite abonos). */
         BigDecimal montoPagoInicial,
-        String metodoPago
+        String metodoPago,
+        /** Sucursal donde prefiere tomar clases (regla de inicio por clase disponible hoy). Null = la del alumno. */
+        Long sucursalPreferidaId
 ) {}

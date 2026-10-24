@@ -65,10 +65,11 @@ y `APP_SEED_ADMIN_PASSWORD` (los defaults dicen literalmente "dev-only"/"CambiaE
 | `APP_COOKIE_SAMESITE` | `Lax` | Politica SameSite de la cookie de refresh |
 | `APP_CORS_ORIGINS` | `http://localhost:5174` | Origen(es) permitidos para CORS (la URL del frontend) |
 | `APP_UPLOADS_DIR` | `uploads` | Carpeta donde se guardan logos/imagenes/comprobantes subidos |
-| `APP_MAIL_HOST` | `smtp.gmail.com` | Host SMTP para correo (reset de password, notificaciones) |
-| `APP_MAIL_PORT` | `587` | Puerto SMTP |
-| `APP_MAIL_USERNAME` | *(vacio)* | Cuenta SMTP — sin esto el envio de correo falla silenciosamente |
-| `APP_MAIL_PASSWORD` | *(vacio)* | Password/App Password de la cuenta SMTP (nunca la de la cuenta si es Gmail, usa un App Password) |
+| `APP_MAIL_HOST` | `smtp.gmail.com` | Solo valor inicial: la cuenta SMTP vive en la tabla `mail_config` y se edita desde "Correo del sistema" (SUPER_ADMIN) |
+| `APP_MAIL_PORT` | `587` | Solo valor inicial (idem) |
+| `APP_MAIL_USERNAME` | *(vacio)* | Solo valor inicial (idem). Si viene junto con la password, el correo arranca habilitado |
+| `APP_MAIL_PASSWORD` | *(vacio)* | Solo valor inicial (idem). En Gmail usa un App Password, nunca la contrasena de la cuenta |
+| `APP_ENCRYPTION_KEY` | `solo-para-desarrollo-...` | Llave con la que se cifra la contrasena SMTP en la BD — **cambiar en produccion**; si cambia, hay que recapturar la contrasena SMTP |
 | `APP_QZ_CERT_PATH` | `qz-keys/digital-certificate.txt` | Certificado para impresion termica via QZ Tray (carpeta ya ignorada por git) |
 | `APP_QZ_KEY_PATH` | `qz-keys/private-key.pem` | Llave privada para QZ Tray (idem) |
 | `APP_FRONTEND_URL` | `http://localhost:5174` | URL del frontend, usada en los links de los correos |

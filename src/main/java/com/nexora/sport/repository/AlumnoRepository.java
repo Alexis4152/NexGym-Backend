@@ -20,6 +20,21 @@ public interface AlumnoRepository extends JpaRepository<Alumno, Long> {
 
     java.util.Optional<Alumno> findByCodigoQrAndDeletedAtIsNull(String codigoQr);
 
+    /** Posibles coincidencias con el cliente de un apartado de plan (para no duplicar alumnos
+     * al convertirlo): mismo correo, mismo telefono (ultimos 10 digitos, sin importar lada o
+     * separadores) o nombre parecido. Los parametros vacios no empatan nada. */
+    @Query("select a from Alumno a where a.centro.id = :centroId and a.deletedAt is null and (" +
+           "  (:email <> '' and lower(a.email) = lower(:email)) " +
+           // replace anidado (funcion estandar de HQL, tipada como string) en vez de
+           // regexp_replace, que Hibernate trata como Object y rechaza en un "like".
+           "  or (:telefono <> '' and replace(replace(replace(replace(replace(a.telefono, ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') " +
+           "      like concat('%', :telefono)) " +
+           "  or (:nombre <> '' and lower(a.nombre) like lower(concat('%', :nombre, '%')))" +
+           ") order by a.nombre")
+    List<Alumno> buscarCoincidencias(@Param("centroId") Long centroId, @Param("email") String email,
+                                      @Param("telefono") String telefono, @Param("nombre") String nombre,
+                                      Pageable pageable);
+
     long countByCentroIdAndEstadoAndDeletedAtIsNull(Long centroId, EstadoAlumno estado);
 
     long countByCentroIdAndDeletedAtIsNull(Long centroId);

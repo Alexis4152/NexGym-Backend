@@ -9,7 +9,10 @@ import com.nexora.sport.model.NivelJerarquia;
 import com.nexora.sport.model.Permiso;
 import com.nexora.sport.model.Rol;
 import com.nexora.sport.model.Seccion;
+import com.nexora.sport.model.Usuario;
 import com.nexora.sport.repository.RolRepository;
+import com.nexora.sport.repository.UsuarioRepository;
+import com.nexora.sport.security.PermisoEvaluator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,51 +28,138 @@ import static com.nexora.sport.model.Seccion.*;
 public class RolService {
 
     private final RolRepository rolRepository;
+    private final UsuarioRepository usuarioRepository;
 
-    public RolService(RolRepository rolRepository) {
+    public RolService(RolRepository rolRepository, UsuarioRepository usuarioRepository) {
         this.rolRepository = rolRepository;
+        this.usuarioRepository = usuarioRepository;
     }
 
     @Transactional(readOnly = true)
-    public List<RolDto> listar(Long centroId) {
-        return rolRepository.findByCentroIdOrCentroIsNull(centroId).stream().map(this::toDto).toList();
+    /** Roles visibles para el actor: su mismo nivel y los inferiores, NUNCA uno superior (un
+     * Dueño no sabe que existe el rol de plataforma SUPER_ADMIN; un Administrador no ve al
+     * Dueño). El SUPER_ADMIN ve todos. Aplica tambien al selector de rol de Usuarios. */
+    public List<RolDto> listar(Usuario actor, Long centroId) {
+        int rangoActor = actor.getRol().getNivel().ordinal();
+        return rolRepository.findByCentroIdOrCentroIsNull(centroId).stream()
+                .filter(r -> r.getNivel().ordinal() >= rangoActor)
+                .map(this::toDto).toList();
     }
 
+    // Reglas homologadas con DemoPV#RoleService:
+    //  - CREAR un rol: solo SUPER_ADMIN (el catalogo de roles es de la plataforma).
+    //  - EDITAR secciones/permisos: SUPER_ADMIN, o quien administra roles (el Dueño) sobre los
+    //    roles de nivel ESTRICTAMENTE MENOR al suyo -- incluidos los roles de sistema
+    //    (Administrador, Recepcion, Entrenador...), que es justo como el Dueño da y quita
+    //    permisos a su personal. Nadie edita su propio nivel ni uno superior.
+    //  - A un rol de sistema no se le cambia el nombre ni el nivel (solo secciones/permisos).
+    //  - Nadie otorga un permiso o una seccion que el mismo no tiene (no escalar privilegios).
+    //  - Un rol OPERATIVO nunca recibe la seccion Roles ni permisos de roles (DemoPV: un cajero
+    //    jamas puede editar permisos); un rol SUPERVISOR (Dueño) nunca la pierde.
+
     @Transactional
-    public RolDto crear(Long centroId, Centro centro, RolRequest request) {
+    public RolDto crear(Usuario actor, Long centroId, Centro centro, RolRequest request) {
+        if (!esSuperAdmin(actor)) {
+            throw new IllegalStateException("Solo el administrador de la plataforma puede crear roles nuevos");
+        }
         if (rolRepository.existsByCentroIdAndNombre(centroId, request.nombre())) {
             throw new FieldConflictException("nombre", "Ya existe un rol con ese nombre");
         }
         Rol rol = new Rol();
         rol.setCentro(centro);
-        rol.setNombre(request.nombre());
-        rol.setSecciones(parseSecciones(request.secciones()));
+        rol.setNombre(request.nombre().trim());
         rol.setNivel(parseNivelAsignable(request.nivel()));
-        rol.setPermisos(parsePermisos(request.permisos()));
+        rol.setSecciones(sanearSecciones(parseSecciones(request.secciones()), rol.getNivel()));
+        rol.setPermisos(sanearPermisos(parsePermisos(request.permisos()), rol.getNivel()));
         return toDto(rolRepository.save(rol));
     }
 
     @Transactional
-    public RolDto actualizar(Long centroId, Long id, RolRequest request) {
+    public RolDto actualizar(Usuario actor, Long centroId, Long id, RolRequest request) {
         Rol rol = buscarDelCentro(centroId, id);
+        boolean superAdmin = esSuperAdmin(actor);
+        if (!superAdmin) assertNivelInferior(actor, rol.getNivel(), "modificar");
+
         if (rol.isEsSistema()) {
-            throw new IllegalStateException("No se puede modificar un rol de sistema");
+            // Nombre y nivel fijos: el resto del sistema los reconoce por eso.
+            if (request.nombre() != null && !request.nombre().trim().equals(rol.getNombre())) {
+                throw new IllegalStateException("No se puede renombrar un rol de sistema");
+            }
+        } else {
+            String nombre = request.nombre().trim();
+            if (!nombre.equalsIgnoreCase(rol.getNombre()) && rolRepository.existsByCentroIdAndNombre(centroId, nombre)) {
+                throw new FieldConflictException("nombre", "Ya existe un rol con ese nombre");
+            }
+            rol.setNombre(nombre);
+            NivelJerarquia nivel = parseNivelAsignable(request.nivel());
+            if (!superAdmin) assertNivelInferior(actor, nivel, "asignar");
+            rol.setNivel(nivel);
         }
-        rol.setNombre(request.nombre());
-        rol.setSecciones(parseSecciones(request.secciones()));
-        rol.setNivel(parseNivelAsignable(request.nivel()));
-        rol.setPermisos(parsePermisos(request.permisos()));
+
+        Set<Seccion> secciones = sanearSecciones(parseSecciones(request.secciones()), rol.getNivel());
+        Set<Permiso> permisos = sanearPermisos(parsePermisos(request.permisos()), rol.getNivel());
+        if (!superAdmin) {
+            // Solo se valida lo que se AGREGA: un rol puede conservar algo que el actor no tiene.
+            for (Seccion s : secciones) {
+                if (!rol.getSecciones().contains(s) && !actor.getRol().getSecciones().contains(s)) {
+                    throw new IllegalStateException("No puedes otorgar la seccion " + s + " porque tu no la tienes");
+                }
+            }
+            for (Permiso p : permisos) {
+                if (!rol.getPermisos().contains(p) && !PermisoEvaluator.tiene(actor, p)) {
+                    throw new IllegalStateException("No puedes otorgar el permiso " + p + " porque tu no lo tienes");
+                }
+            }
+        }
+        rol.setSecciones(secciones);
+        rol.setPermisos(permisos);
         return toDto(rolRepository.save(rol));
     }
 
     @Transactional
-    public void eliminar(Long centroId, Long id) {
+    public void eliminar(Usuario actor, Long centroId, Long id) {
         Rol rol = buscarDelCentro(centroId, id);
         if (rol.isEsSistema()) {
             throw new IllegalStateException("No se puede eliminar un rol de sistema");
         }
+        if (!esSuperAdmin(actor)) assertNivelInferior(actor, rol.getNivel(), "eliminar");
+        if (usuarioRepository.countByRolIdAndDeletedAtIsNull(rol.getId()) > 0) {
+            throw new IllegalStateException("No se puede eliminar: hay usuarios con este rol asignado");
+        }
         rol.setActivo(false);
         rolRepository.save(rol);
+    }
+
+    private static boolean esSuperAdmin(Usuario actor) {
+        return actor.getRol().getNivel() == NivelJerarquia.SUPER_ADMIN;
+    }
+
+    /** El orden de NivelJerarquia ES la jerarquia (SUPER_ADMIN=0 ... OPERATIVO=3). */
+    private static void assertNivelInferior(Usuario actor, NivelJerarquia nivelObjetivo, String accion) {
+        if (nivelObjetivo.ordinal() <= actor.getRol().getNivel().ordinal()) {
+            throw new IllegalStateException("No puedes " + accion + " un rol de tu mismo nivel o superior");
+        }
+    }
+
+    private static Set<Seccion> sanearSecciones(Set<Seccion> secciones, NivelJerarquia nivel) {
+        Set<Seccion> s = new java.util.HashSet<>(secciones);
+        s.remove(CENTROS); // la administracion de centros es solo de la plataforma
+        if (nivel == NivelJerarquia.OPERATIVO) s.remove(ROLES);
+        if (nivel == NivelJerarquia.SUPERVISOR) s.add(ROLES); // el Dueño nunca se bloquea la pantalla de roles
+        return s;
+    }
+
+    private static Set<Permiso> sanearPermisos(Set<Permiso> permisos, NivelJerarquia nivel) {
+        Set<Permiso> p = new java.util.HashSet<>(permisos);
+        if (nivel == NivelJerarquia.OPERATIVO) {
+            p.remove(ROLES_VER);
+            p.remove(ROLES_ADMINISTRAR);
+        }
+        if (nivel == NivelJerarquia.SUPERVISOR) {
+            p.add(ROLES_VER);
+            p.add(ROLES_ADMINISTRAR);
+        }
+        return p;
     }
 
     /** Nunca devuelve un rol de otro centro (ni el global SUPER_ADMIN): evita que un

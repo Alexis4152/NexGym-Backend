@@ -4,7 +4,9 @@ import com.nexora.sport.dto.PagoMembresiaDto;
 import com.nexora.sport.dto.PagoMembresiaRequest;
 import com.nexora.sport.exception.ResourceNotFoundException;
 import com.nexora.sport.model.*;
+import com.nexora.sport.repository.CorteCajaRepository;
 import com.nexora.sport.repository.MembresiaRepository;
+import com.nexora.sport.repository.MovimientoFinancieroRepository;
 import com.nexora.sport.repository.PagoMembresiaRepository;
 import com.nexora.sport.security.TenantScope;
 import org.springframework.stereotype.Service;
@@ -29,14 +31,49 @@ public class PagoMembresiaService {
     private final CajaService cajaService;
     private final TenantScope tenantScope;
     private final NotificacionService notificacionService;
+    private final MovimientoFinancieroRepository movimientoFinancieroRepository;
+    private final CorteCajaRepository corteCajaRepository;
 
     public PagoMembresiaService(PagoMembresiaRepository pagoMembresiaRepository, MembresiaRepository membresiaRepository,
-                                 CajaService cajaService, TenantScope tenantScope, NotificacionService notificacionService) {
+                                 CajaService cajaService, TenantScope tenantScope, NotificacionService notificacionService,
+                                 MovimientoFinancieroRepository movimientoFinancieroRepository,
+                                 CorteCajaRepository corteCajaRepository) {
+        this.corteCajaRepository = corteCajaRepository;
         this.pagoMembresiaRepository = pagoMembresiaRepository;
         this.membresiaRepository = membresiaRepository;
         this.cajaService = cajaService;
         this.tenantScope = tenantScope;
         this.notificacionService = notificacionService;
+        this.movimientoFinancieroRepository = movimientoFinancieroRepository;
+    }
+
+    /**
+     * Registra el anticipo de un apartado de plan (tienda publica) como primer pago de la
+     * membresia creada al convertirlo. A diferencia de registrarPagoInterno, NO crea un
+     * movimiento nuevo en Caja: el anticipo ya entro a Caja al apartarse (ver
+     * CajaService#registrarIngresoDeApartadoPlan) -- el pago se liga a ESE movimiento, asi
+     * el ingreso no se duplica y cancelar este pago lo anula igual que cualquier otro.
+     * Tampoco aplica la regla de "plan sin abonos": el anticipo ya se cobro de todas formas.
+     */
+    @Transactional
+    public PagoMembresia registrarAnticipoApartado(Usuario actor, Membresia m, BigDecimal monto, Long movimientoFinancieroId) {
+        if (monto == null || monto.compareTo(BigDecimal.ZERO) <= 0) return null;
+        BigDecimal saldo = calcularSaldo(m);
+        if (monto.compareTo(saldo) > 0) {
+            throw new IllegalArgumentException("El anticipo ($" + monto + ") es mayor que el total de la membresia ($"
+                    + m.getPrecioFinal() + "); reduce el descuento");
+        }
+        PagoMembresia pago = new PagoMembresia();
+        pago.setMembresia(m);
+        pago.setMonto(monto);
+        pago.setMetodoPago(MetodoPago.TARJETA);
+        if (movimientoFinancieroId != null) {
+            pago.setMovimientoFinanciero(movimientoFinancieroRepository.getReferenceById(movimientoFinancieroId));
+        }
+        pago.setRegistradoPor(actor);
+        pago = pagoMembresiaRepository.save(pago);
+        notificacionService.notificarPago(m, pago, true, calcularSaldo(m));
+        return pago;
     }
 
     @Transactional(readOnly = true)
@@ -60,6 +97,25 @@ public class PagoMembresiaService {
         Membresia m = buscarDelCentro(membresiaId, centroId);
         registrarPagoInterno(actor, centroId, m, request.monto(), request.metodoPago());
         return toDto(pagoMembresiaRepository.findByMembresiaIdOrderByFechaDescCreatedAtDesc(m.getId()).get(0));
+    }
+
+    /**
+     * Cobro en mostrador con lo que ENTREGO el cliente: en efectivo puede entregar mas de lo
+     * que debe -- se abona solo hasta el saldo y la diferencia es su cambio (queda en el pago
+     * para el ticket). En tarjeta/transferencia no hay cambio: el monto no puede pasar del saldo.
+     */
+    @Transactional
+    public PagoMembresia registrarPagoConRecibido(Usuario actor, Long centroId, Membresia m,
+                                                  BigDecimal montoRecibido, String metodoPagoStr) {
+        MetodoPago metodo = metodoPagoStr != null ? MetodoPago.valueOf(metodoPagoStr) : MetodoPago.EFECTIVO;
+        if (metodo != MetodoPago.EFECTIVO) {
+            return registrarPagoInterno(actor, centroId, m, montoRecibido, metodoPagoStr);
+        }
+        BigDecimal aplicado = montoRecibido.min(calcularSaldo(m));
+        PagoMembresia pago = registrarPagoInterno(actor, centroId, m, aplicado, metodoPagoStr);
+        pago.setMontoRecibido(montoRecibido);
+        pago.setCambio(montoRecibido.subtract(aplicado));
+        return pagoMembresiaRepository.save(pago);
     }
 
     /** Usado tambien por MembresiaService al contratar/renovar con pago inicial, para no duplicar las validaciones de abono. */
@@ -87,6 +143,12 @@ public class PagoMembresiaService {
         }
 
         MetodoPago metodo = metodoPagoStr != null ? MetodoPago.valueOf(metodoPagoStr) : MetodoPago.EFECTIVO;
+        // El pago queda en el corte abierto de quien cobra, para que cuente en su arqueo. El
+        // efectivo tiene que entrar a una caja: sin corte abierto no se puede cobrar en efectivo.
+        CorteCaja corte = corteCajaRepository.findFirstByUsuarioIdAndEstado(actor.getId(), EstadoCorteCaja.ABIERTO).orElse(null);
+        if (corte == null && metodo == MetodoPago.EFECTIVO) {
+            throw new IllegalStateException("Para cobrar en efectivo necesitas tener un corte de caja abierto");
+        }
         MovimientoFinanciero movimiento = cajaService.registrarIngresoDeMembresia(centroId, m, monto, metodo, actor);
 
         PagoMembresia pago = new PagoMembresia();
@@ -95,6 +157,7 @@ public class PagoMembresiaService {
         pago.setMetodoPago(metodo);
         pago.setMovimientoFinanciero(movimiento);
         pago.setRegistradoPor(actor);
+        pago.setCorteCaja(corte);
         pago = pagoMembresiaRepository.save(pago);
 
         // La notificacion solo se dispara aqui, DESPUES de que el pago y su movimiento en

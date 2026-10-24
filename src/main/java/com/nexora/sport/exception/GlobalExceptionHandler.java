@@ -37,6 +37,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error(ex.getMessage()));
     }
 
+    /** Corte de caja: diferencia grande en un conteo -> el frontend pide reescribir el monto. */
+    @ExceptionHandler(DiferenciaGrandeException.class)
+    public ResponseEntity<ApiResponse<Map<String, String>>> handleDiferenciaGrande(DiferenciaGrandeException ex) {
+        return ResponseEntity.badRequest().body(new ApiResponse<>(false, ex.getMessage(), Map.of("diferenciaGrande", "true")));
+    }
+
     @ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
     public ResponseEntity<ApiResponse<Void>> handleBadRequest(RuntimeException ex) {
         return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));

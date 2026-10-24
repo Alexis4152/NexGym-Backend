@@ -22,8 +22,12 @@ public class Sucursal {
     @Column(nullable = false, length = 150)
     private String nombre;
 
+    /** Texto compuesto a partir de `domicilio` (lo leen tienda en linea, tickets, etc.). */
     @Column(length = 300)
     private String direccion;
+
+    @Embedded
+    private Domicilio domicilio;
 
     @Column(length = 300)
     private String notas;

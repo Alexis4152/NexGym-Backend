@@ -12,6 +12,8 @@ import java.time.LocalDateTime;
 
 public interface ApartadoPlanRepository extends JpaRepository<ApartadoPlan, Long> {
 
+    long countByCentroIdAndEstado(Long centroId, EstadoApartadoPlan estado);
+
     /** Mismo patron de filtros opcionales que ApartadoRepository#buscar (ver ahi el porque
      * del cast(:x as tipo) en cada "is null"). */
     @Query("select a from ApartadoPlan a where a.centro.id = :centroId " +

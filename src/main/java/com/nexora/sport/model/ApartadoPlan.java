@@ -75,6 +75,16 @@ public class ApartadoPlan {
     @Column(name = "convertido_en")
     private LocalDateTime convertidoEn;
 
+    /** Alumno (existente o creado en ese momento) al que se le dio de alta la membresia al
+     * convertir el apartado -- null mientras siga PENDIENTE o si se cancelo. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "alumno_id")
+    private Alumno alumno;
+
+    /** Membresia real creada al convertir (el anticipo queda registrado como su primer pago). */
+    @Column(name = "membresia_id")
+    private Long membresiaId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "cancelado_por")
     private Usuario canceladoPor;

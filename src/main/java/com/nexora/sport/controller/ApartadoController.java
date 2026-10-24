@@ -3,6 +3,7 @@ package com.nexora.sport.controller;
 import com.nexora.sport.dto.*;
 import com.nexora.sport.model.EstadoApartado;
 import com.nexora.sport.model.Usuario;
+import com.nexora.sport.service.ApartadoPlanService;
 import com.nexora.sport.service.ApartadoService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.PageRequest;
@@ -12,6 +13,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/apartados")
@@ -19,9 +21,21 @@ import java.time.LocalDate;
 public class ApartadoController {
 
     private final ApartadoService apartadoService;
+    private final ApartadoPlanService apartadoPlanService;
 
-    public ApartadoController(ApartadoService apartadoService) {
+    public ApartadoController(ApartadoService apartadoService, ApartadoPlanService apartadoPlanService) {
         this.apartadoService = apartadoService;
+        this.apartadoPlanService = apartadoPlanService;
+    }
+
+    /** Pendientes de atender (productos + planes) para el badge del menu y el aviso de
+     * "nuevo apartado" en la pantalla de Apartados. Mismo publico que la notificacion
+     * (seccion TIENDA). */
+    @GetMapping("/pendientes")
+    public ApiResponse<Map<String, Long>> pendientes(@AuthenticationPrincipal Usuario actor) {
+        return ApiResponse.ok(Map.of(
+                "productos", apartadoService.contarPendientes(actor),
+                "planes", apartadoPlanService.contarPendientes(actor)));
     }
 
     @GetMapping

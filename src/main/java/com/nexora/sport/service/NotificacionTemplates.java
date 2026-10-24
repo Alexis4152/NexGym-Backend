@@ -117,6 +117,15 @@ public final class NotificacionTemplates {
     public static final String EGRESO_PENDIENTE_APROBACION_TITULO = "Egreso pendiente de aprobación";
     public static final String EGRESO_PENDIENTE_APROBACION_MSG = "{{registrador}} registró un egreso de ${{monto}} ({{categoria}}) sin comprobante. Requiere tu aprobación.";
 
+    public static final String ADMIN_APARTADO_NUEVO_TITULO = "Nuevo apartado en línea";
+    public static final String ADMIN_APARTADO_NUEVO_MSG = "{{cliente}} ({{telefono}}) apartó {{detalle}} por ${{total}} desde la tienda en línea (folio #{{folio}}). Revísalo y confírmalo en Apartados.";
+
+    public static final String ADMIN_APARTADO_PLAN_NUEVO_TITULO = "Nuevo apartado de membresía";
+    public static final String ADMIN_APARTADO_PLAN_NUEVO_MSG = "{{cliente}} ({{telefono}}) apartó el plan \"{{plan}}\" con un anticipo de ${{anticipo}} (folio #{{folio}}). Da de alta su membresía cuando se presente.";
+
+    public static final String ADMIN_APARTADO_CANCELADO_CLIENTE_TITULO = "Apartado cancelado por el cliente";
+    public static final String ADMIN_APARTADO_CANCELADO_CLIENTE_MSG = "{{cliente}} ({{telefono}}) canceló su apartado #{{folio}} desde la tienda en línea.";
+
     // ---- Entrenador (destinatarioTipo=INSTRUCTOR) ----
     public static final String INSTRUCTOR_CLASE_ASIGNADA_TITULO = "Nueva clase asignada";
     public static final String INSTRUCTOR_CLASE_ASIGNADA_MSG = "Se te asignó la clase de {{disciplina}} los {{dia}} a las {{hora}} en {{sucursal}}.";

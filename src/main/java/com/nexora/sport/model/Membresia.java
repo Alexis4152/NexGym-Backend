@@ -55,6 +55,16 @@ public class Membresia {
     @Column(name = "fecha_fin")
     private LocalDate fechaFin;
 
+    /**
+     * Regla de inicio por disponibilidad de clases (ver InicioMembresiaService): si al darla
+     * de alta TODAVIA quedaba una clase de su disciplina con lugar ese dia, la membresia queda
+     * PENDIENTE con fechaInicio = siguiente dia habil, y esta fecha = el dia de compra. Si el
+     * alumno registra asistencia ESE dia, la vigencia arranca ahi mismo (fechaInicio = hoy,
+     * ACTIVA); si no asiste, simplemente arranca en fechaInicio como cualquier PENDIENTE.
+     */
+    @Column(name = "fecha_inicio_anticipable")
+    private LocalDate fechaInicioAnticipable;
+
     /** Snapshot de plan.numeroClasesIncluidas al contratar (null si el plan no es por clases). */
     @Column(name = "numero_clases_contratadas")
     private Integer numeroClasesContratadas;

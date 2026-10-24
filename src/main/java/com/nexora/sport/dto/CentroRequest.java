@@ -1,5 +1,6 @@
 package com.nexora.sport.dto;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -13,7 +14,9 @@ public record CentroRequest(
         String colorPrimario,
         String telefono,
         String emailContacto,
-        String direccion,
+        /** Obligatorio al guardar la configuracion del centro (CentroService#actualizar); al
+         * crear el centro (SUPER_ADMIN, solo con nombre) aun no se pide. */
+        @Valid DomicilioDto domicilio,
         Boolean apartadosActivo,
         Integer horasApartadoDefault,
         BigDecimal montoMaximoDescuentoApartado,
@@ -26,5 +29,6 @@ public record CentroRequest(
         Boolean notificacionesInternoActivo,
         String notificacionesDiasAntesVencimiento,
         Integer notificacionesHorasAntesClase,
-        LocalTime horaCierreAutomaticoCorte
+        LocalTime horaCierreAutomaticoCorte,
+        Boolean conteoCiego
 ) {}

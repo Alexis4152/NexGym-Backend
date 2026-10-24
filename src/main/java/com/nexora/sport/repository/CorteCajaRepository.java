@@ -16,6 +16,7 @@ import java.util.Optional;
 
 public interface CorteCajaRepository extends JpaRepository<CorteCaja, Long> {
     Optional<CorteCaja> findFirstByUsuarioIdAndEstado(Long usuarioId, EstadoCorteCaja estado);
+    Optional<CorteCaja> findFirstByCajaRegistradoraIdAndEstado(Long cajaId, EstadoCorteCaja estado);
     boolean existsByUsuarioIdAndAbiertoEnBetween(Long usuarioId, LocalDateTime desde, LocalDateTime hasta);
     Page<CorteCaja> findByCentroId(Long centroId, Pageable pageable);
     List<CorteCaja> findByCentroIdAndEstado(Long centroId, EstadoCorteCaja estado);
@@ -27,14 +28,17 @@ public interface CorteCajaRepository extends JpaRepository<CorteCaja, Long> {
      *    (Dueno/SUPER_ADMIN); nunca lo manda el cliente, lo calcula CorteCajaService#listar.
      *  - sucursalId: el filtro OPCIONAL que el propio Dueno eligio en pantalla ("ver solo esta
      *    sucursal"), independiente del anterior. */
-    @Query("select c from CorteCaja c where c.centro.id = :centroId " +
+    // Sucursal del corte = la de su caja; los cortes anteriores a las cajas (sin caja) usan la
+    // del cajero. left join: sin caja/sin sucursal no deben desaparecer del listado.
+    @Query("select c from CorteCaja c left join c.cajaRegistradora cr left join cr.sucursal cs " +
+           "left join c.usuario u left join u.sucursal us where c.centro.id = :centroId " +
            // cast(:x as tipo) en el "is null": ver nota en VentaRepository/ApartadoRepository.
            "and (cast(:desde as timestamp) is null or c.abiertoEn >= :desde) " +
            "and (cast(:hasta as timestamp) is null or c.abiertoEn < :hasta) " +
            "and (cast(:estado as string) is null or c.estado = :estado) " +
            "and (cast(:usuarioId as long) is null or c.usuario.id = :usuarioId) " +
-           "and (:sucursalIds is null or c.usuario.sucursal.id in :sucursalIds) " +
-           "and (cast(:sucursalId as long) is null or c.usuario.sucursal.id = :sucursalId) " +
+           "and (:sucursalIds is null or coalesce(cs.id, us.id) in :sucursalIds) " +
+           "and (cast(:sucursalId as long) is null or coalesce(cs.id, us.id) = :sucursalId) " +
            "order by c.abiertoEn desc")
     Page<CorteCaja> buscar(@Param("centroId") Long centroId, @Param("desde") LocalDateTime desde,
                            @Param("hasta") LocalDateTime hasta, @Param("estado") EstadoCorteCaja estado,

@@ -18,6 +18,8 @@ public interface ApartadoRepository extends JpaRepository<Apartado, Long> {
 
     List<Apartado> findByEstadoAndExpiraEnBefore(EstadoApartado estado, LocalDateTime momento);
 
+    long countByCentroIdAndEstado(Long centroId, EstadoApartado estado);
+
     /** Filtros homologados con DemoPV#Apartados (Estado/Desde/Hasta/"cliente o producto", todos opcionales). */
     @Query("select distinct a from Apartado a left join a.items i where a.centro.id = :centroId " +
            // cast(:x as tipo) en el "is null": la ocurrencia suelta del parametro (sin
@@ -35,7 +37,11 @@ public interface ApartadoRepository extends JpaRepository<Apartado, Long> {
                            @Param("desde") LocalDateTime desde, @Param("hasta") LocalDateTime hasta,
                            @Param("q") String q, Pageable pageable);
 
+    /** Piezas de un articulo que ya reclaman las solicitudes PENDIENTES hechas ANTES que esta
+     * (homologado con DemoPV#sumPendingQuantityByProductBefore): un pendiente no descuenta stock,
+     * asi que el "disponible" de una solicitud es stock - lo que piden las que van delante en la
+     * fila. Asi el cajero ve cual puede confirmar (la primera en llegar) y cual ya no alcanza. */
     @Query("select coalesce(sum(i.cantidad), 0) from ApartadoItem i " +
-           "where i.articulo.id = :articuloId and i.apartado.estado = 'PENDIENTE' and i.apartado.id <> :excludeApartadoId")
-    int sumCantidadPendientePorArticulo(@Param("articuloId") Long articuloId, @Param("excludeApartadoId") Long excludeApartadoId);
+           "where i.articulo.id = :articuloId and i.apartado.estado = 'PENDIENTE' and i.apartado.id < :apartadoId")
+    int sumCantidadPendienteAnteriorPorArticulo(@Param("articuloId") Long articuloId, @Param("apartadoId") Long apartadoId);
 }

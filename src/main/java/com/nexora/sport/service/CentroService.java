@@ -2,6 +2,7 @@ package com.nexora.sport.service;
 
 import com.nexora.sport.dto.CentroDto;
 import com.nexora.sport.dto.CentroRequest;
+import com.nexora.sport.dto.DomicilioDto;
 import com.nexora.sport.exception.FieldConflictException;
 import com.nexora.sport.exception.ResourceNotFoundException;
 import com.nexora.sport.model.Centro;
@@ -29,9 +30,12 @@ public class CentroService {
     private final SucursalService sucursalService;
     private final FileStorageService fileStorageService;
     private final TenantScope tenantScope;
+    private final CodigoPostalService codigoPostalService;
 
     public CentroService(CentroRepository centroRepository, RolService rolService, CajaService cajaService,
-                          SucursalService sucursalService, FileStorageService fileStorageService, TenantScope tenantScope) {
+                          SucursalService sucursalService, FileStorageService fileStorageService, TenantScope tenantScope,
+                          CodigoPostalService codigoPostalService) {
+        this.codigoPostalService = codigoPostalService;
         this.centroRepository = centroRepository;
         this.rolService = rolService;
         this.cajaService = cajaService;
@@ -82,9 +86,17 @@ public class CentroService {
 
     @Transactional
     public CentroDto actualizar(Long id, CentroRequest request) {
+        if (request.domicilio() == null) {
+            throw new FieldConflictException("domicilio", "El domicilio del centro es obligatorio");
+        }
+        if (codigoPostalService.esInexistente(request.domicilio().codigoPostal())) {
+            throw new FieldConflictException("domicilio.codigoPostal", "Ese codigo postal no existe en el catalogo de SEPOMEX");
+        }
         Centro centro = buscar(id);
         aplicar(centro, request);
-        return toDto(centroRepository.save(centro));
+        centro = centroRepository.save(centro);
+        sucursalService.heredarDomicilioDelCentro(centro);
+        return toDto(centro);
     }
 
     @Transactional
@@ -102,7 +114,10 @@ public class CentroService {
         centro.setNombre(request.nombre());
         centro.setTelefono(request.telefono());
         centro.setEmailContacto(request.emailContacto());
-        centro.setDireccion(request.direccion());
+        if (request.domicilio() != null) {
+            centro.setDomicilio(request.domicilio().aEntidad());
+            centro.setDireccion(centro.getDomicilio().formatear(250));
+        }
         if (request.colorPrimario() != null) centro.setColorPrimario(request.colorPrimario());
         if (request.catalogoPublicoActivo() != null) centro.setCatalogoPublicoActivo(request.catalogoPublicoActivo());
         if (request.apartadosActivo() != null) centro.setApartadosActivo(request.apartadosActivo());
@@ -118,6 +133,7 @@ public class CentroService {
         if (request.notificacionesDiasAntesVencimiento() != null) centro.setNotificacionesDiasAntesVencimiento(request.notificacionesDiasAntesVencimiento());
         if (request.notificacionesHorasAntesClase() != null) centro.setNotificacionesHorasAntesClase(request.notificacionesHorasAntesClase());
         centro.setHoraCierreAutomaticoCorte(request.horaCierreAutomaticoCorte());
+        if (request.conteoCiego() != null) centro.setConteoCiego(request.conteoCiego());
 
         String slug = request.slugPublico();
         if (slug == null || slug.isBlank()) {
@@ -144,12 +160,12 @@ public class CentroService {
     public CentroDto toDto(Centro c) {
         return new CentroDto(c.getId(), c.getNombre(), c.getSlugPublico(), c.isCatalogoPublicoActivo(),
                 c.getColorPrimario(), c.getLogoUrl(), c.getTelefono(), c.getEmailContacto(), c.getDireccion(),
-                c.isActivo(), c.isApartadosActivo(), c.getHorasApartadoDefault(),
+                DomicilioDto.de(c.getDomicilio()), c.isActivo(), c.isApartadosActivo(), c.getHorasApartadoDefault(),
                 c.getMontoMaximoDescuentoApartado(), c.getPorcentajeMaximoDescuentoApartado(),
                 c.isPermitirAccesoConAdeudo(), c.getDiasInactividadRiesgo(),
                 c.isNotificacionesMembresiaActivo(), c.isNotificacionesClaseActivo(),
                 c.isNotificacionesEmailActivo(), c.isNotificacionesInternoActivo(),
                 c.getNotificacionesDiasAntesVencimiento(), c.getNotificacionesHorasAntesClase(),
-                c.getHoraCierreAutomaticoCorte());
+                c.getHoraCierreAutomaticoCorte(), c.isConteoCiego());
     }
 }

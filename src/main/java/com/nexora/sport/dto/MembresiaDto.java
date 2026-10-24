@@ -31,5 +31,7 @@ public record MembresiaDto(
         Long membresiaAnteriorId,
         boolean renovada,
         String suspendidaMotivo,
-        String canceladaMotivo
+        String canceladaMotivo,
+        /** Si es hoy: la membresia arranca en cuanto registre asistencia hoy (ver InicioMembresiaService). */
+        LocalDate fechaInicioAnticipable
 ) {}

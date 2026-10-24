@@ -477,6 +477,54 @@ public class NotificacionService {
                 true, null);
     }
 
+    // ---- Apartados de la tienda publica ---------------------------------------------
+    // seccionObjetivo=TIENDA: los ven SUPER_ADMIN, Dueno, Administrador, Recepcion y Caja/
+    // Ventas (Entrenador y Encargado de Inventario no tienen esa seccion). Siempre activas
+    // (no dependen de un switch de categoria del centro). El correo al staff lo siguen
+    // mandando ApartadoService/ApartadoPlanService como antes, aqui solo va la bandeja.
+
+    /** sucursal: la de recoleccion si TODOS los productos son de la misma, para que la vea
+     * el personal de esa sucursal; null (todo el centro) si se mezclan varias. */
+    public void notificarApartadoNuevo(Apartado a, Sucursal sucursal) {
+        Centro centro = a.getCentro();
+        int piezas = a.getItems().stream().mapToInt(ApartadoItem::getCantidad).sum();
+        String detalle = a.getItems().size() == 1
+                ? piezas + " x " + a.getItems().get(0).getArticuloNombre()
+                : piezas + " piezas (" + a.getItems().size() + " productos)";
+        Map<String, String> v = mapOf("cliente", a.getClienteNombre(), "telefono", a.getClienteTelefono(),
+                "detalle", detalle, "total", a.getTotal().setScale(2, java.math.RoundingMode.HALF_UP).toString(),
+                "folio", String.valueOf(a.getId()));
+        crear(centro, TipoNotificacion.ADMIN_APARTADO_NUEVO, TipoDestinatario.CENTRO_ADMIN, null, null,
+                Seccion.TIENDA, sucursal,
+                ADMIN_APARTADO_NUEVO_TITULO, render(ADMIN_APARTADO_NUEVO_MSG, v),
+                "APARTADO", a.getId(), "APARTADO_NUEVO:" + a.getId(),
+                true, null);
+    }
+
+    public void notificarApartadoPlanNuevo(ApartadoPlan a) {
+        Centro centro = a.getCentro();
+        Map<String, String> v = mapOf("cliente", a.getClienteNombre(), "telefono", a.getClienteTelefono(),
+                "plan", a.getPlanNombreSnapshot(),
+                "anticipo", a.getMontoAnticipo().setScale(2, java.math.RoundingMode.HALF_UP).toString(),
+                "folio", String.valueOf(a.getId()));
+        crear(centro, TipoNotificacion.ADMIN_APARTADO_PLAN_NUEVO, TipoDestinatario.CENTRO_ADMIN, null, null,
+                Seccion.TIENDA, null,
+                ADMIN_APARTADO_PLAN_NUEVO_TITULO, render(ADMIN_APARTADO_PLAN_NUEVO_MSG, v),
+                "APARTADO_PLAN", a.getId(), "APARTADO_PLAN_NUEVO:" + a.getId(),
+                true, null);
+    }
+
+    public void notificarApartadoCanceladoPorCliente(Apartado a, Sucursal sucursal) {
+        Centro centro = a.getCentro();
+        Map<String, String> v = mapOf("cliente", a.getClienteNombre(), "telefono", a.getClienteTelefono(),
+                "folio", String.valueOf(a.getId()));
+        crear(centro, TipoNotificacion.ADMIN_APARTADO_CANCELADO_CLIENTE, TipoDestinatario.CENTRO_ADMIN, null, null,
+                Seccion.TIENDA, sucursal,
+                ADMIN_APARTADO_CANCELADO_CLIENTE_TITULO, render(ADMIN_APARTADO_CANCELADO_CLIENTE_MSG, v),
+                "APARTADO", a.getId(), "APARTADO_CANCELADO_CLIENTE:" + a.getId(),
+                true, null);
+    }
+
     // =====================================================================
     // Entrenador (destinatarioTipo=INSTRUCTOR): email a Instructor.email siempre; ademas
     // bandeja en-app si Instructor.usuario esta ligado (ver listarBandeja/miInstructorId).

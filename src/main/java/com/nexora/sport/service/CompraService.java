@@ -25,13 +25,15 @@ public class CompraService {
     private final MovimientoFinancieroRepository movimientoFinancieroRepository;
     private final CentroRepository centroRepository;
     private final TenantScope tenantScope;
+    private final BloqueoFilas bloqueoFilas;
 
     public CompraService(CompraRepository compraRepository, ProveedorRepository proveedorRepository,
                           ArticuloInventarioRepository articuloRepository,
                           MovimientoInventarioRepository movimientoInventarioRepository,
                           CategoriaMovimientoRepository categoriaMovimientoRepository,
                           MovimientoFinancieroRepository movimientoFinancieroRepository,
-                          CentroRepository centroRepository, TenantScope tenantScope) {
+                          CentroRepository centroRepository, TenantScope tenantScope, BloqueoFilas bloqueoFilas) {
+        this.bloqueoFilas = bloqueoFilas;
         this.compraRepository = compraRepository;
         this.proveedorRepository = proveedorRepository;
         this.articuloRepository = articuloRepository;
@@ -81,14 +83,18 @@ public class CompraService {
 
     @Transactional
     public CompraDto marcarRealizada(Long id, Usuario actor) {
-        Compra compra = buscar(id);
+        // Bloqueo de la compra: marcarla "realizada" dos veces a la vez sumaria el stock doble.
+        Compra compra = bloqueoFilas.bloquear(Compra.class, id, "Compra no encontrada");
         if (compra.getEstado() == EstadoCompra.REALIZADA) return toDto(compra);
         compra.setEstado(EstadoCompra.REALIZADA);
         compra.setFechaRealizada(LocalDate.now());
 
+        java.util.Map<Long, ArticuloInventario> articulos = bloqueoFilas.bloquearEnOrden(ArticuloInventario.class,
+                compra.getItems().stream().map(i -> i.getArticulo() != null ? i.getArticulo().getId() : null).toList(),
+                "Articulo no encontrado");
         for (CompraItem item : compra.getItems()) {
             if (item.getArticulo() == null) continue;
-            ArticuloInventario articulo = articuloRepository.findById(item.getArticulo().getId()).orElse(null);
+            ArticuloInventario articulo = articulos.get(item.getArticulo().getId());
             if (articulo == null) continue;
             int anterior = articulo.getStock();
             int nuevo = anterior + item.getCantidad();
