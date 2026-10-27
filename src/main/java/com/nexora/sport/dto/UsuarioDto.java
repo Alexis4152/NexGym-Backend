@@ -20,5 +20,8 @@ public record UsuarioDto(
         String nombre,
         String email,
         boolean activo,
-        boolean mustChangePassword
+        boolean mustChangePassword,
+        /** Cuenta de instructor acotada (ver AlcanceInstructorService): el frontend la usa para
+         * mostrar "Mis clases" y dejar alumnos en solo lectura. */
+        boolean esInstructor
 ) {}

@@ -234,9 +234,10 @@ public class RolService {
         // (ver NotificacionService#esPersonalOperativo): un Entrenador solo vera sus
         // propios avisos (INSTRUCTOR_*, ver destinatarioTipo=INSTRUCTOR) mas alla de
         // tener esta seccion, que solo habilita la pantalla/endpoint de notificaciones.
+        // Sin ASISTENCIAS_REGISTRAR: el Entrenador solo consulta; el dueno se lo da en Roles si quiere.
         crearRolSistemaSiNoExiste(centro, "Entrenador", NivelJerarquia.OPERATIVO,
                 EnumSet.of(CLASES, ASISTENCIA, ALUMNOS, NOTIFICACIONES),
-                EnumSet.of(CLASES_VER, ASISTENCIAS_VER, ASISTENCIAS_REGISTRAR, ALUMNOS_VER));
+                EnumSet.of(CLASES_VER, ASISTENCIAS_VER, ALUMNOS_VER));
 
         crearRolSistemaSiNoExiste(centro, "Caja / Ventas", NivelJerarquia.OPERATIVO,
                 EnumSet.of(DASHBOARD, CAJA, TIENDA, INVENTARIO, NOTIFICACIONES),

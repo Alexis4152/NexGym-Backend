@@ -39,13 +39,15 @@ public class AlumnoService {
     private final ApartadoPdfService apartadoPdfService;
     private final MailService mailService;
     private final NotificacionService notificacionService;
+    private final AlcanceInstructorService alcanceInstructor;
 
     public AlumnoService(AlumnoRepository alumnoRepository, DisciplinaRepository disciplinaRepository,
                           CentroRepository centroRepository, SucursalRepository sucursalRepository,
                           TenantScope tenantScope, FileStorageService fileStorageService,
                           ApartadoPdfService apartadoPdfService, MailService mailService,
-                          NotificacionService notificacionService) {
+                          NotificacionService notificacionService, AlcanceInstructorService alcanceInstructor) {
         this.notificacionService = notificacionService;
+        this.alcanceInstructor = alcanceInstructor;
         this.alumnoRepository = alumnoRepository;
         this.disciplinaRepository = disciplinaRepository;
         this.centroRepository = centroRepository;
@@ -64,6 +66,12 @@ public class AlumnoService {
     @Transactional(readOnly = true)
     public PageResponse<AlumnoDto> listar(Usuario actor, String q, Pageable pageable) {
         Long centroId = tenantScope.scopeId(actor);
+        var instructor = alcanceInstructor.instructorAcotado(actor);
+        if (instructor.isPresent()) {
+            // Un instructor solo ve a los alumnos registrados a sus clases.
+            return PageResponse.of(alcanceInstructor.alumnosDeClases(centroId,
+                    alcanceInstructor.clasesActivas(instructor.get()), q, pageable), this::toDto);
+        }
         var page = (q == null || q.isBlank())
                 ? alumnoRepository.findByCentroIdAndDeletedAtIsNull(centroId, pageable)
                 : alumnoRepository.findByCentroIdAndDeletedAtIsNullAndNombreContainingIgnoreCase(centroId, q, pageable);
@@ -82,7 +90,16 @@ public class AlumnoService {
         if (alumno.getCentro() == null || !alumno.getCentro().getId().equals(centroId)) {
             throw new ResourceNotFoundException("Alumno no encontrado");
         }
+        assertVisibleParaInstructor(actor, centroId, alumno);
         return alumno;
+    }
+
+    /** Un instructor no puede abrir a un alumno que no este registrado a sus clases. */
+    private void assertVisibleParaInstructor(Usuario actor, Long centroId, Alumno alumno) {
+        var instructor = alcanceInstructor.instructorAcotado(actor);
+        if (instructor.isPresent() && !alcanceInstructor.esAlumnoDeSusClases(instructor.get(), centroId, alumno.getId())) {
+            throw new ResourceNotFoundException("Alumno no encontrado");
+        }
     }
 
     @Transactional(readOnly = true)
@@ -92,6 +109,7 @@ public class AlumnoService {
 
     @Transactional
     public AlumnoDto crear(Usuario actor, AlumnoRequest request) {
+        alcanceInstructor.assertNoEsInstructor(actor);
         Long centroId = tenantScope.scopeId(actor);
         Alumno alumno = new Alumno();
         alumno.setCentro(centroRepository.getReferenceById(centroId));
@@ -133,6 +151,11 @@ public class AlumnoService {
         if (alumno.getCentro() == null || !alumno.getCentro().getId().equals(centroId)) {
             throw new ResourceNotFoundException("Ningun alumno tiene ese codigo QR");
         }
+        try {
+            assertVisibleParaInstructor(actor, centroId, alumno);
+        } catch (ResourceNotFoundException e) {
+            throw new ResourceNotFoundException("Ese alumno no esta registrado a tus clases");
+        }
         return toDto(alumno);
     }
 
@@ -140,6 +163,7 @@ public class AlumnoService {
      * servir de inmediato) y emite uno nuevo. */
     @Transactional
     public AlumnoDto regenerarQr(Usuario actor, Long id) {
+        alcanceInstructor.assertNoEsInstructor(actor);
         Alumno alumno = buscarEnAlcance(actor, id);
         alumno.setCodigoQr(UUID.randomUUID().toString());
         return toDto(alumnoRepository.save(alumno));
@@ -147,6 +171,7 @@ public class AlumnoService {
 
     @Transactional
     public AlumnoDto actualizar(Usuario actor, Long id, AlumnoRequest request) {
+        alcanceInstructor.assertNoEsInstructor(actor);
         Long centroId = tenantScope.scopeId(actor);
         Alumno alumno = buscarEnAlcance(actor, id);
         alumno.setSucursal(resolverSucursal(centroId, request.sucursalId()));
@@ -156,6 +181,7 @@ public class AlumnoService {
 
     @Transactional
     public void desactivar(Usuario actor, Long id) {
+        alcanceInstructor.assertNoEsInstructor(actor);
         Alumno alumno = buscarEnAlcance(actor, id);
         alumno.setEstado(EstadoAlumno.INACTIVO);
         alumno.setFechaBaja(java.time.LocalDateTime.now());
@@ -164,6 +190,7 @@ public class AlumnoService {
 
     @Transactional
     public AlumnoDto subirFoto(Usuario actor, Long id, MultipartFile file) {
+        alcanceInstructor.assertNoEsInstructor(actor);
         Alumno alumno = buscarEnAlcance(actor, id);
         String rutaAnterior = alumno.getFotoUrl();
         String ruta = fileStorageService.guardar("alumnos", alumno.getId(), file, FOTO_TIPOS_PERMITIDOS, FOTO_TAMANIO_MAXIMO);

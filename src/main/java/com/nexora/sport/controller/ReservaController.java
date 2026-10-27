@@ -32,10 +32,11 @@ public class ReservaController {
     }
 
     @GetMapping("/alumno/{alumnoId}")
-    public ApiResponse<PageResponse<ReservaDto>> listarPorAlumno(@PathVariable Long alumnoId,
+    public ApiResponse<PageResponse<ReservaDto>> listarPorAlumno(@AuthenticationPrincipal Usuario actor,
+                                                                   @PathVariable Long alumnoId,
                                                                    @RequestParam(defaultValue = "0") int page,
                                                                    @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.ok(reservaService.listarPorAlumno(alumnoId, PageRequest.of(page, size)));
+        return ApiResponse.ok(reservaService.listarPorAlumno(actor, alumnoId, PageRequest.of(page, size)));
     }
 
     @PostMapping
@@ -44,7 +45,8 @@ public class ReservaController {
     }
 
     @PutMapping("/{id}/estado")
-    public ApiResponse<ReservaDto> cambiarEstado(@PathVariable Long id, @RequestParam String estado) {
-        return ApiResponse.ok("Reserva actualizada", reservaService.cambiarEstado(id, EstadoReserva.valueOf(estado)));
+    public ApiResponse<ReservaDto> cambiarEstado(@AuthenticationPrincipal Usuario actor, @PathVariable Long id,
+                                                 @RequestParam String estado) {
+        return ApiResponse.ok("Reserva actualizada", reservaService.cambiarEstado(actor, id, EstadoReserva.valueOf(estado)));
     }
 }

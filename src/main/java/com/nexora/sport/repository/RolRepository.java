@@ -14,4 +14,5 @@ public interface RolRepository extends JpaRepository<Rol, Long> {
     List<Rol> findByCentroIdOrCentroIsNull(Long centroId);
     Optional<Rol> findByNombreAndEsSistemaTrue(String nombre);
     boolean existsByCentroIdAndNombre(Long centroId, String nombre);
+    Optional<Rol> findByCentroIdAndNombre(Long centroId, String nombre);
 }

@@ -24,11 +24,14 @@ public class AsistenciaService {
     private final TenantScope tenantScope;
     private final MembresiaService membresiaService;
     private final PagoMembresiaService pagoMembresiaService;
+    private final AlcanceInstructorService alcanceInstructor;
 
     public AsistenciaService(AsistenciaRepository asistenciaRepository, AlumnoRepository alumnoRepository,
                               DisciplinaRepository disciplinaRepository, ClaseRepository claseRepository,
                               CentroRepository centroRepository, TenantScope tenantScope,
-                              MembresiaService membresiaService, PagoMembresiaService pagoMembresiaService) {
+                              MembresiaService membresiaService, PagoMembresiaService pagoMembresiaService,
+                              AlcanceInstructorService alcanceInstructor) {
+        this.alcanceInstructor = alcanceInstructor;
         this.asistenciaRepository = asistenciaRepository;
         this.alumnoRepository = alumnoRepository;
         this.disciplinaRepository = disciplinaRepository;
@@ -41,7 +44,16 @@ public class AsistenciaService {
 
     @Transactional(readOnly = true)
     public PageResponse<AsistenciaDto> listar(Usuario actor, Pageable pageable) {
-        return PageResponse.of(asistenciaRepository.findByCentroId(tenantScope.scopeId(actor), pageable), this::toDto);
+        Long centroId = tenantScope.scopeId(actor);
+        var instructor = alcanceInstructor.instructorAcotado(actor);
+        if (instructor.isPresent()) {
+            var clases = alcanceInstructor.clasesActivas(instructor.get());
+            if (clases.isEmpty()) return PageResponse.of(org.springframework.data.domain.Page.empty(pageable), this::toDto);
+            var claseIds = clases.stream().map(Clase::getId).toList();
+            var disciplinaIds = clases.stream().map(c -> c.getDisciplina().getId()).distinct().toList();
+            return PageResponse.of(asistenciaRepository.buscarDeInstructor(centroId, claseIds, disciplinaIds, pageable), this::toDto);
+        }
+        return PageResponse.of(asistenciaRepository.findByCentroId(centroId, pageable), this::toDto);
     }
 
     public long contarHoy(Long centroId) {
@@ -61,6 +73,10 @@ public class AsistenciaService {
         Alumno alumno = alumnoRepository.findById(request.alumnoId())
                 .filter(al -> al.getCentro().getId().equals(centroId) && al.getDeletedAt() == null)
                 .orElseThrow(() -> new ResourceNotFoundException("Alumno no encontrado"));
+        var instructor = alcanceInstructor.instructorAcotado(actor);
+        if (instructor.isPresent() && !alcanceInstructor.esAlumnoDeSusClases(instructor.get(), centroId, alumno.getId())) {
+            throw new IllegalStateException(alumno.getNombre() + " no esta registrado a tus clases");
+        }
         Clase clase = null;
         if (request.claseId() != null) {
             clase = claseRepository.findById(request.claseId())

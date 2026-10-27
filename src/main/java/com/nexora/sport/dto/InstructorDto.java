@@ -8,7 +8,9 @@ public record InstructorDto(
         String usuarioNombre,
         String nombre,
         String telefono,
+        /** Correo de acceso (= usuario de login de la cuenta ligada). */
         String email,
+        String emailPersonal,
         String especialidad,
         String fotoUrl,
         boolean activo,

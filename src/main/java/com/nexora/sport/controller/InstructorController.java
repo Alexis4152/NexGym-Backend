@@ -66,9 +66,8 @@ public class InstructorController {
 
     @PostMapping("/{id}/documentos")
     public ApiResponse<DocumentoInstructorDto> subirDocumento(@PathVariable Long id,
-                                                               @RequestParam Long disciplinaId,
                                                                @RequestParam("file") MultipartFile file) {
-        return ApiResponse.ok("Documento subido", documentoInstructorService.subir(id, disciplinaId, file));
+        return ApiResponse.ok("Documento subido", documentoInstructorService.subir(id, file));
     }
 
     @DeleteMapping("/{id}/documentos/{documentoId}")

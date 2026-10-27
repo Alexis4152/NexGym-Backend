@@ -36,6 +36,11 @@ public class Instructor {
     @Column(length = 150)
     private String email;
 
+    /** Correo personal de contacto (opcional). El de arriba (`email`) es el de ACCESO: su
+     * usuario de login, que puede ser institucional o este mismo personal. */
+    @Column(name = "email_personal", length = 150)
+    private String emailPersonal;
+
     @Column(length = 200)
     private String especialidad;
 

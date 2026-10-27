@@ -1,5 +1,6 @@
 package com.nexora.sport.service;
 
+import com.nexora.sport.dto.AlumnoClaseDto;
 import com.nexora.sport.dto.ClaseDisponibleDto;
 import com.nexora.sport.dto.ClaseDto;
 import com.nexora.sport.dto.ClaseRequest;
@@ -45,12 +46,14 @@ public class ClaseService {
     private final ReservaRepository reservaRepository;
     private final TenantScope tenantScope;
     private final NotificacionService notificacionService;
+    private final AlcanceInstructorService alcanceInstructor;
 
     public ClaseService(ClaseRepository claseRepository, DisciplinaRepository disciplinaRepository,
                          InstructorRepository instructorRepository, LugarRepository lugarRepository,
                          SucursalRepository sucursalRepository, CentroRepository centroRepository,
                          ReservaRepository reservaRepository, TenantScope tenantScope,
-                         NotificacionService notificacionService) {
+                         NotificacionService notificacionService, AlcanceInstructorService alcanceInstructor) {
+        this.alcanceInstructor = alcanceInstructor;
         this.claseRepository = claseRepository;
         this.disciplinaRepository = disciplinaRepository;
         this.instructorRepository = instructorRepository;
@@ -79,13 +82,34 @@ public class ClaseService {
      * las clases a las suyas (Caso 5/13 del encargo: "Instructor A no ve clases de B").
      * Dueno/Supervisor/Admin nunca se acotan asi, aunque tengan una ficha de instructor. */
     private Long instructorPropioSiAplica(Usuario actor) {
-        if (tenantScope.isAdminOSuperior(actor)) return null;
-        return instructorRepository.findByUsuarioId(actor.getId()).map(Instructor::getId).orElse(null);
+        return alcanceInstructor.instructorAcotado(actor).map(Instructor::getId).orElse(null);
     }
 
     @Transactional(readOnly = true)
     public List<ClaseDto> listarActivas(Usuario actor) {
-        return claseRepository.findByCentroIdAndActivoTrue(tenantScope.scopeId(actor)).stream().map(this::toDto).toList();
+        Long instructorId = instructorPropioSiAplica(actor);
+        return claseRepository.findByCentroIdAndActivoTrue(tenantScope.scopeId(actor)).stream()
+                .filter(c -> instructorId == null || (c.getInstructor() != null && c.getInstructor().getId().equals(instructorId)))
+                .map(this::toDto).toList();
+    }
+
+    /** Alumnos registrados a una clase, solo lectura. Un instructor solo puede ver los de sus
+     * propias clases (ver AlcanceInstructorService). */
+    @Transactional(readOnly = true)
+    public List<AlumnoClaseDto> alumnosDeClase(Usuario actor, Long claseId) {
+        Long centroId = tenantScope.scopeId(actor);
+        Clase clase = buscar(claseId);
+        if (!clase.getCentro().getId().equals(centroId)) throw new ResourceNotFoundException("Clase no encontrada");
+        Long instructorId = instructorPropioSiAplica(actor);
+        if (instructorId != null && (clase.getInstructor() == null || !clase.getInstructor().getId().equals(instructorId))) {
+            throw new ResourceNotFoundException("Clase no encontrada");
+        }
+        return alcanceInstructor.alumnosDeClases(centroId, List.of(clase), null,
+                        org.springframework.data.domain.PageRequest.of(0, 500, org.springframework.data.domain.Sort.by("nombre")))
+                .stream()
+                .map(a -> new AlumnoClaseDto(a.getId(), a.getNombre(), a.getFotoUrl(), a.getTelefono(), a.getEmail(),
+                        a.getEstado() != null ? a.getEstado().name() : null))
+                .toList();
     }
 
     /** Disponibilidad de mostrador (seccion 26 del encargo de jerarquias): a diferencia
@@ -96,7 +120,10 @@ public class ClaseService {
     @Transactional(readOnly = true)
     public List<ClaseDisponibleDto> disponibilidad(Usuario actor) {
         Long centroId = tenantScope.scopeId(actor);
+        Long instructorId = instructorPropioSiAplica(actor);
         return claseRepository.findByCentroIdAndActivoTrue(centroId).stream()
+                // Un instructor tampoco ve aqui las clases de los demas.
+                .filter(c -> instructorId == null || (c.getInstructor() != null && c.getInstructor().getId().equals(instructorId)))
                 .map(c -> {
                     LocalDate proximaFecha = proximaOcurrencia(c.getDiaSemana());
                     long reservados = reservaRepository.countByClaseIdAndFechaAndEstadoNot(

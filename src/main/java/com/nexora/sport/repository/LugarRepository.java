@@ -10,6 +10,9 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 
 public interface LugarRepository extends JpaRepository<Lugar, Long> {
+    /** Para validar duplicados de nombre/direccion dentro de la sucursal (LugarService#validarNoDuplicado). */
+    List<Lugar> findBySucursalIdAndActivoTrue(Long sucursalId);
+
     Page<Lugar> findByCentroId(Long centroId, Pageable pageable);
 
     @Query("select l from Lugar l where l.centro.id = :centroId and l.activo = true " +

@@ -23,10 +23,13 @@ public class ReservaService {
     private final CentroRepository centroRepository;
     private final TenantScope tenantScope;
     private final NotificacionService notificacionService;
+    private final AlcanceInstructorService alcanceInstructor;
 
     public ReservaService(ReservaRepository reservaRepository, ClaseRepository claseRepository,
                            AlumnoRepository alumnoRepository, CentroRepository centroRepository,
-                           TenantScope tenantScope, NotificacionService notificacionService) {
+                           TenantScope tenantScope, NotificacionService notificacionService,
+                           AlcanceInstructorService alcanceInstructor) {
+        this.alcanceInstructor = alcanceInstructor;
         this.reservaRepository = reservaRepository;
         this.claseRepository = claseRepository;
         this.alumnoRepository = alumnoRepository;
@@ -37,16 +40,36 @@ public class ReservaService {
 
     @Transactional(readOnly = true)
     public PageResponse<ReservaDto> listar(Usuario actor, Pageable pageable) {
-        return PageResponse.of(reservaRepository.findByCentroId(tenantScope.scopeId(actor), pageable), this::toDto);
+        Long centroId = tenantScope.scopeId(actor);
+        var instructor = alcanceInstructor.instructorAcotado(actor);
+        if (instructor.isPresent()) {
+            var claseIds = alcanceInstructor.claseIds(instructor.get());
+            if (claseIds.isEmpty()) return PageResponse.of(org.springframework.data.domain.Page.empty(pageable), this::toDto);
+            return PageResponse.of(reservaRepository.findByCentroIdAndClaseIdIn(centroId, claseIds, pageable), this::toDto);
+        }
+        return PageResponse.of(reservaRepository.findByCentroId(centroId, pageable), this::toDto);
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<ReservaDto> listarPorAlumno(Long alumnoId, Pageable pageable) {
-        return PageResponse.of(reservaRepository.findByAlumnoId(alumnoId, pageable), this::toDto);
+    public PageResponse<ReservaDto> listarPorAlumno(Usuario actor, Long alumnoId, Pageable pageable) {
+        Long centroId = tenantScope.scopeId(actor);
+        Alumno alumno = alumnoRepository.findById(alumnoId)
+                .filter(a -> a.getCentro() != null && a.getCentro().getId().equals(centroId))
+                .orElseThrow(() -> new ResourceNotFoundException("Alumno no encontrado"));
+        var instructor = alcanceInstructor.instructorAcotado(actor);
+        if (instructor.isPresent()) {
+            // Solo las reservas del alumno en las clases de este instructor.
+            var claseIds = alcanceInstructor.claseIds(instructor.get());
+            if (claseIds.isEmpty()) return PageResponse.of(org.springframework.data.domain.Page.empty(pageable), this::toDto);
+            return PageResponse.of(reservaRepository.findByAlumnoIdAndClaseIdIn(alumno.getId(), claseIds, pageable), this::toDto);
+        }
+        return PageResponse.of(reservaRepository.findByAlumnoId(alumno.getId(), pageable), this::toDto);
     }
 
     @Transactional
     public ReservaDto crear(Usuario actor, ReservaRequest request) {
+        // Inscribir alumnos a una clase no es tarea del instructor (solo consulta su lista).
+        alcanceInstructor.assertNoEsInstructor(actor);
         Clase clase = claseRepository.findById(request.claseId())
                 .orElseThrow(() -> new ResourceNotFoundException("Clase no encontrada"));
         Alumno alumno = alumnoRepository.findById(request.alumnoId())
@@ -80,8 +103,12 @@ public class ReservaService {
     }
 
     @Transactional
-    public ReservaDto cambiarEstado(Long id, EstadoReserva estado) {
+    public ReservaDto cambiarEstado(Usuario actor, Long id, EstadoReserva estado) {
+        alcanceInstructor.assertNoEsInstructor(actor);
         Reserva reserva = buscar(id);
+        if (!reserva.getCentro().getId().equals(tenantScope.scopeId(actor))) {
+            throw new ResourceNotFoundException("Reserva no encontrada");
+        }
         EstadoReserva anterior = reserva.getEstado();
         Clase clase = reserva.getClase();
         // Se checa ANTES de guardar el nuevo estado: si esta reserva es la que hace que

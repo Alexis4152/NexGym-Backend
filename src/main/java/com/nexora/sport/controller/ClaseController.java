@@ -1,5 +1,6 @@
 package com.nexora.sport.controller;
 
+import com.nexora.sport.dto.AlumnoClaseDto;
 import com.nexora.sport.dto.ApiResponse;
 import com.nexora.sport.dto.ClaseDisponibleDto;
 import com.nexora.sport.dto.ClaseDto;
@@ -43,6 +44,12 @@ public class ClaseController {
     @GetMapping("/disponibilidad")
     public ApiResponse<List<ClaseDisponibleDto>> disponibilidad(@AuthenticationPrincipal Usuario actor) {
         return ApiResponse.ok(claseService.disponibilidad(actor));
+    }
+
+    /** Alumnos registrados a la clase (solo lectura; un instructor solo los de sus clases). */
+    @GetMapping("/{id}/alumnos")
+    public ApiResponse<List<AlumnoClaseDto>> alumnos(@AuthenticationPrincipal Usuario actor, @PathVariable Long id) {
+        return ApiResponse.ok(claseService.alumnosDeClase(actor, id));
     }
 
     @PostMapping

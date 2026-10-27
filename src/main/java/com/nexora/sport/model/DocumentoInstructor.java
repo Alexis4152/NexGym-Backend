@@ -21,8 +21,10 @@ public class DocumentoInstructor {
     @JoinColumn(name = "instructor_id", nullable = false)
     private Instructor instructor;
 
+    /** Ya no se usa al subir (un solo diploma por instructor, ver DocumentoInstructorService);
+     * solo queda en los documentos anteriores. La columna se volvio nullable en MigracionesUnaVez. */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "disciplina_id", nullable = false)
+    @JoinColumn(name = "disciplina_id")
     private Disciplina disciplina;
 
     @Column(nullable = false, length = 300)

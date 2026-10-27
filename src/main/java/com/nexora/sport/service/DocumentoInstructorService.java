@@ -19,8 +19,9 @@ import java.util.Set;
 @Service
 public class DocumentoInstructorService {
 
+    /** Diploma, constancia o certificado: PDF o imagen escaneada/fotografiada. */
     private static final Set<String> TIPOS_PERMITIDOS = Set.of("image/png", "image/jpeg", "image/webp", "application/pdf");
-    private static final long TAMANIO_MAXIMO = 10L * 1024 * 1024; // 10MB
+    private static final long TAMANIO_MAXIMO = 5L * 1024 * 1024; // 5MB
 
     private final DocumentoInstructorRepository documentoRepository;
     private final DisciplinaRepository disciplinaRepository;
@@ -40,25 +41,26 @@ public class DocumentoInstructorService {
         return documentoRepository.findByInstructorIdOrderByCreatedAtDesc(instructorId).stream().map(this::toDto).toList();
     }
 
+    /** Un solo diploma/archivo por instructor, sin importar cuantas disciplinas imparta:
+     * subir uno nuevo REEMPLAZA al anterior (y a cualquier documento previo a esta regla). */
     @Transactional
-    public DocumentoInstructorDto subir(Long instructorId, Long disciplinaId, MultipartFile file) {
-        Instructor instructor = instructorRepository.findWithDisciplinasById(instructorId)
+    public DocumentoInstructorDto subir(Long instructorId, MultipartFile file) {
+        Instructor instructor = instructorRepository.findById(instructorId)
                 .orElseThrow(() -> new ResourceNotFoundException("Instructor no encontrado"));
-        Disciplina disciplina = disciplinaRepository.findById(disciplinaId)
-                .orElseThrow(() -> new ResourceNotFoundException("Disciplina no encontrada"));
-        boolean instructorImparte = instructor.getDisciplinas().stream().anyMatch(d -> d.getId().equals(disciplinaId));
-        if (!instructorImparte) {
-            throw new IllegalArgumentException("El instructor no imparte esa disciplina");
-        }
 
+        // Primero se guarda el nuevo: si el archivo no es valido, el anterior se conserva.
         String ruta = fileStorageService.guardar("instructores", instructor.getId(), file, TIPOS_PERMITIDOS, TAMANIO_MAXIMO);
+
+        List<DocumentoInstructor> anteriores = documentoRepository.findByInstructorIdOrderByCreatedAtDesc(instructorId);
+        documentoRepository.deleteAll(anteriores);
 
         DocumentoInstructor documento = new DocumentoInstructor();
         documento.setInstructor(instructor);
-        documento.setDisciplina(disciplina);
         documento.setRuta(ruta);
         documento.setNombreOriginal(file.getOriginalFilename());
-        return toDto(documentoRepository.save(documento));
+        DocumentoInstructorDto dto = toDto(documentoRepository.save(documento));
+        anteriores.forEach(d -> fileStorageService.eliminar(d.getRuta()));
+        return dto;
     }
 
     @Transactional
@@ -74,7 +76,9 @@ public class DocumentoInstructorService {
 
     public DocumentoInstructorDto toDto(DocumentoInstructor d) {
         return new DocumentoInstructorDto(
-                d.getId(), d.getDisciplina().getId(), d.getDisciplina().getNombre(),
+                d.getId(),
+                d.getDisciplina() != null ? d.getDisciplina().getId() : null,
+                d.getDisciplina() != null ? d.getDisciplina().getNombre() : null,
                 d.getRuta(), d.getNombreOriginal(), d.getCreatedAt()
         );
     }

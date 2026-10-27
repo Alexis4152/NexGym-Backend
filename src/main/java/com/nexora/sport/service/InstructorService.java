@@ -3,6 +3,7 @@ package com.nexora.sport.service;
 import com.nexora.sport.dto.InstructorDto;
 import com.nexora.sport.dto.InstructorRequest;
 import com.nexora.sport.dto.PageResponse;
+import com.nexora.sport.exception.FieldConflictException;
 import com.nexora.sport.exception.ResourceNotFoundException;
 import com.nexora.sport.model.Disciplina;
 import com.nexora.sport.model.Instructor;
@@ -12,14 +13,16 @@ import com.nexora.sport.repository.CentroRepository;
 import com.nexora.sport.repository.DisciplinaRepository;
 import com.nexora.sport.repository.InstructorRepository;
 import com.nexora.sport.repository.SucursalRepository;
-import com.nexora.sport.repository.UsuarioRepository;
 import com.nexora.sport.security.TenantScope;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -32,24 +35,24 @@ public class InstructorService {
     private final InstructorRepository instructorRepository;
     private final DisciplinaRepository disciplinaRepository;
     private final CentroRepository centroRepository;
-    private final UsuarioRepository usuarioRepository;
     private final SucursalRepository sucursalRepository;
     private final TenantScope tenantScope;
     private final FileStorageService fileStorageService;
     private final NotificacionService notificacionService;
+    private final UsuarioService usuarioService;
 
     public InstructorService(InstructorRepository instructorRepository, DisciplinaRepository disciplinaRepository,
-                              CentroRepository centroRepository, UsuarioRepository usuarioRepository,
-                              SucursalRepository sucursalRepository, TenantScope tenantScope,
-                              FileStorageService fileStorageService, NotificacionService notificacionService) {
+                              CentroRepository centroRepository, SucursalRepository sucursalRepository,
+                              TenantScope tenantScope, FileStorageService fileStorageService,
+                              NotificacionService notificacionService, UsuarioService usuarioService) {
         this.instructorRepository = instructorRepository;
         this.disciplinaRepository = disciplinaRepository;
         this.centroRepository = centroRepository;
-        this.usuarioRepository = usuarioRepository;
         this.sucursalRepository = sucursalRepository;
         this.tenantScope = tenantScope;
         this.fileStorageService = fileStorageService;
         this.notificacionService = notificacionService;
+        this.usuarioService = usuarioService;
     }
 
     /** Filtra por la SUCURSAL ACTIVA (una sola, ver TenantScope#sucursalActivaId):
@@ -96,7 +99,7 @@ public class InstructorService {
         Long centroId = tenantScope.scopeId(actor);
         Instructor instructor = new Instructor();
         instructor.setCentro(centroRepository.getReferenceById(centroId));
-        aplicar(centroId, instructor, request);
+        aplicar(actor, centroId, instructor, request);
         return toDto(instructorRepository.save(instructor));
     }
 
@@ -107,7 +110,7 @@ public class InstructorService {
         Set<Long> disciplinasAntes = instructor.getDisciplinas().stream().map(Disciplina::getId).collect(Collectors.toSet());
         Set<Long> sucursalesAntesIds = instructor.getSucursales().stream().map(Sucursal::getId).collect(Collectors.toSet());
 
-        aplicar(centroId, instructor, request);
+        aplicar(actor, centroId, instructor, request);
         instructor = instructorRepository.save(instructor);
 
         for (Disciplina d : instructor.getDisciplinas()) {
@@ -129,6 +132,7 @@ public class InstructorService {
         Instructor instructor = buscarDelCentro(actor, tenantScope.scopeId(actor), id);
         instructor.setActivo(false);
         instructorRepository.save(instructor);
+        usuarioService.desactivarCuentaInstructor(instructor.getUsuario());
     }
 
     @Transactional
@@ -144,10 +148,11 @@ public class InstructorService {
         return toDto(instructor);
     }
 
-    private void aplicar(Long centroId, Instructor instructor, InstructorRequest request) {
-        instructor.setNombre(request.nombre());
+    private void aplicar(Usuario actor, Long centroId, Instructor instructor, InstructorRequest request) {
+        instructor.setNombre(request.nombre().trim());
         instructor.setTelefono(request.telefono());
-        instructor.setEmail(request.email());
+        instructor.setEmail(normalizarEmail(request.email()));
+        instructor.setEmailPersonal(normalizarEmail(request.emailPersonal()));
         instructor.setEspecialidad(request.especialidad());
         Set<Disciplina> disciplinas = new HashSet<>();
         if (request.disciplinaIds() != null) {
@@ -168,16 +173,41 @@ public class InstructorService {
         }
         instructor.setSucursales(sucursales);
 
-        if (request.usuarioId() == null) {
-            instructor.setUsuario(null);
-        } else {
-            Usuario u = usuarioRepository.findById(request.usuarioId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
-            if (u.getCentro() == null || !u.getCentro().getId().equals(centroId)) {
-                throw new ResourceNotFoundException("Usuario no encontrado");
-            }
-            instructor.setUsuario(u);
+        vincularCuenta(actor, centroId, instructor);
+    }
+
+    /** El correo de acceso de la ficha ES el usuario de login del instructor: si la ficha aun no
+     * tiene cuenta (alta nueva, o instructor anterior a esta regla) se crea o se liga la existente
+     * con ese correo; si ya la tiene, se le sincronizan nombre, correo y sucursales. */
+    private void vincularCuenta(Usuario actor, Long centroId, Instructor instructor) {
+        List<Sucursal> sucursalesCuenta = sucursalesParaCuenta(actor, centroId, instructor);
+        Usuario cuenta = instructor.getUsuario();
+        if (cuenta != null) {
+            usuarioService.sincronizarCuentaInstructor(actor, cuenta, instructor.getNombre(), instructor.getEmail(), sucursalesCuenta);
+            return;
         }
+        cuenta = usuarioService.obtenerOCrearCuentaInstructor(actor, centroId, instructor.getNombre(), instructor.getEmail(), sucursalesCuenta);
+        Long cuentaId = cuenta.getId();
+        instructorRepository.findByUsuarioId(cuentaId)
+                .filter(otra -> !otra.getId().equals(instructor.getId()))
+                .ifPresent(otra -> {
+                    throw new FieldConflictException("email", "Ese correo ya es el acceso del instructor \"" + otra.getNombre() + "\".");
+                });
+        instructor.setUsuario(cuenta);
+    }
+
+    /** Las sucursales donde da clases; si son "todas" (ninguna marcada), todas las activas que el
+     * actor administra -- ordenadas por nombre para que la sucursal "hogar" sea estable. */
+    private List<Sucursal> sucursalesParaCuenta(Usuario actor, Long centroId, Instructor instructor) {
+        List<Sucursal> base = instructor.getSucursales().isEmpty()
+                ? sucursalRepository.findByCentroIdAndActivoTrueOrderByNombre(centroId).stream()
+                        .filter(s -> tenantScope.sucursalPermite(actor, s.getId())).toList()
+                : new ArrayList<>(instructor.getSucursales());
+        return base.stream().sorted(Comparator.comparing(Sucursal::getNombre)).toList();
+    }
+
+    private static String normalizarEmail(String email) {
+        return email == null || email.isBlank() ? null : email.trim().toLowerCase();
     }
 
     public InstructorDto toDto(Instructor i) {
@@ -185,7 +215,7 @@ public class InstructorService {
                 i.getId(),
                 i.getUsuario() != null ? i.getUsuario().getId() : null,
                 i.getUsuario() != null ? i.getUsuario().getNombre() : null,
-                i.getNombre(), i.getTelefono(), i.getEmail(), i.getEspecialidad(), i.getFotoUrl(),
+                i.getNombre(), i.getTelefono(), i.getEmail(), i.getEmailPersonal(), i.getEspecialidad(), i.getFotoUrl(),
                 i.isActivo(),
                 i.getDisciplinas().stream().map(Disciplina::getId).collect(Collectors.toSet()),
                 i.getDisciplinas().stream().map(Disciplina::getNombre).collect(Collectors.toSet()),

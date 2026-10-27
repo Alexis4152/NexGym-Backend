@@ -23,6 +23,10 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
 
     Page<Reserva> findByAlumnoId(Long alumnoId, Pageable pageable);
 
+    /** Lo que ve un instructor: reservas de sus clases (todas, o solo las de un alumno). */
+    Page<Reserva> findByCentroIdAndClaseIdIn(Long centroId, java.util.Collection<Long> claseIds, Pageable pageable);
+    Page<Reserva> findByAlumnoIdAndClaseIdIn(Long alumnoId, java.util.Collection<Long> claseIds, Pageable pageable);
+
     @Query("select case when count(r) > 0 then true else false end from Reserva r " +
            "where r.alumno.id = :alumnoId and r.fecha = :fecha and r.estado <> :estadoExcluido " +
            "and r.clase.horaInicio < :horaFin and r.clase.horaFin > :horaInicio")

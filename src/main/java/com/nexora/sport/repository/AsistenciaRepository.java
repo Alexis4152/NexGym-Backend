@@ -13,6 +13,18 @@ import java.util.Optional;
 
 public interface AsistenciaRepository extends JpaRepository<Asistencia, Long> {
     Page<Asistencia> findByCentroId(Long centroId, Pageable pageable);
+
+    /** Lo que ve un instructor: asistencias a sus clases o a las disciplinas que imparte (en
+     * mostrador casi siempre se registra por disciplina, sin clase). */
+    // left join explicito: "a.clase.id" haria inner join y perderia las asistencias sin clase.
+    @Query(value = "select a from Asistencia a left join a.clase c left join a.disciplina d where a.centro.id = :centroId " +
+                   "and (c.id in :claseIds or d.id in :disciplinaIds) order by a.id desc",
+           countQuery = "select count(a) from Asistencia a left join a.clase c left join a.disciplina d where a.centro.id = :centroId " +
+                        "and (c.id in :claseIds or d.id in :disciplinaIds)")
+    Page<Asistencia> buscarDeInstructor(@Param("centroId") Long centroId,
+                                        @Param("claseIds") java.util.Collection<Long> claseIds,
+                                        @Param("disciplinaIds") java.util.Collection<Long> disciplinaIds,
+                                        Pageable pageable);
     long countByCentroIdAndFecha(Long centroId, LocalDate fecha);
     Page<Asistencia> findByAlumnoId(Long alumnoId, Pageable pageable);
 

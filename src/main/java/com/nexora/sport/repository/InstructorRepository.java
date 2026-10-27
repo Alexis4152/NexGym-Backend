@@ -22,6 +22,8 @@ public interface InstructorRepository extends JpaRepository<Instructor, Long> {
     /** Ficha de instructor ligada a esta cuenta de login (si existe), para acotar "mis clases". */
     Optional<Instructor> findByUsuarioId(Long usuarioId);
 
+    boolean existsByUsuarioId(Long usuarioId);
+
     /** Alcance por sucursal (ver TenantScope#sucursalesPermitidas): un instructor sin
      * ninguna sucursal asignada (i.sucursales vacio) se considera "disponible en todas",
      * asi que siempre es visible sin importar el filtro. `sucursalIds` NUNCA debe venir

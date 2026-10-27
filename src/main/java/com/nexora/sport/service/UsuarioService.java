@@ -11,6 +11,7 @@ import com.nexora.sport.model.Rol;
 import com.nexora.sport.model.Sucursal;
 import com.nexora.sport.model.Usuario;
 import com.nexora.sport.repository.CentroRepository;
+import com.nexora.sport.repository.InstructorRepository;
 import com.nexora.sport.repository.RolRepository;
 import com.nexora.sport.repository.SucursalRepository;
 import com.nexora.sport.repository.UsuarioRepository;
@@ -27,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -42,10 +44,13 @@ public class UsuarioService {
     private final PasswordEncoder passwordEncoder;
     private final MailService mailService;
     private final TenantScope tenantScope;
+    private final InstructorRepository instructorRepository;
 
     public UsuarioService(UsuarioRepository usuarioRepository, RolRepository rolRepository,
                            CentroRepository centroRepository, SucursalRepository sucursalRepository,
-                           PasswordEncoder passwordEncoder, MailService mailService, TenantScope tenantScope) {
+                           PasswordEncoder passwordEncoder, MailService mailService, TenantScope tenantScope,
+                           InstructorRepository instructorRepository) {
+        this.instructorRepository = instructorRepository;
         this.usuarioRepository = usuarioRepository;
         this.rolRepository = rolRepository;
         this.centroRepository = centroRepository;
@@ -85,7 +90,11 @@ public class UsuarioService {
         usuario.setPasswordHash(passwordEncoder.encode(tempPassword));
         usuario.setMustChangePassword(true);
         usuario = usuarioRepository.save(usuario);
+        enviarAcceso(usuario, rol, tempPassword);
+        return toDto(usuario);
+    }
 
+    private void enviarAcceso(Usuario usuario, Rol rol, String tempPassword) {
         String nombreCentro = usuario.getCentro().getNombre();
         mailService.send(usuario.getEmail(), "Tu acceso a " + nombreCentro + " (NexoraSport)",
                 "Se creo una cuenta para ti en " + nombreCentro + ".\n\n" +
@@ -95,7 +104,90 @@ public class UsuarioService {
         // Si no hay SMTP configurado el correo se descarta silenciosamente (MailService es
         // "best effort"); dejamos la contrasena temporal en el log para no perderla en dev.
         log.info("Usuario creado {} / rol {} — contrasena temporal: {}", usuario.getEmail(), rol.getNombre(), tempPassword);
-        return toDto(usuario);
+    }
+
+    /** Rol de sistema que recibe la cuenta de un instructor (ver RolService#seedRolesPorDefecto). */
+    public static final String ROL_INSTRUCTOR = "Entrenador";
+
+    /**
+     * Cuenta de login de un instructor: el correo de acceso que captura el dueno en la ficha
+     * ES su usuario. Si ya hay un usuario vigente del mismo centro con ese correo (p. ej. dado
+     * de alta antes desde Usuarios) se reutiliza; si no, se crea con el rol "Entrenador" y una
+     * contrasena temporal que se le envia por correo. `sucursales`: la primera queda como su
+     * sucursal "hogar" y el resto como adicionales.
+     */
+    @Transactional
+    public Usuario obtenerOCrearCuentaInstructor(Usuario actor, Long centroId, String nombre, String email,
+                                                 List<Sucursal> sucursales) {
+        var existente = usuarioRepository.findByEmailAndDeletedAtIsNull(email);
+        if (existente.isPresent()) {
+            Usuario u = existente.get();
+            if (u.getCentro() == null || !u.getCentro().getId().equals(centroId)) {
+                throw new FieldConflictException("email", "Ese correo ya esta registrado en otra cuenta. Usa otro correo de acceso.");
+            }
+            return u;
+        }
+        if (usuarioRepository.existsByEmail(email)) {
+            throw new FieldConflictException("email", "Ese correo pertenecio a un usuario dado de baja. Usa otro correo de acceso.");
+        }
+        Rol rol = rolRepository.findByCentroIdAndNombre(centroId, ROL_INSTRUCTOR)
+                .orElseThrow(() -> new IllegalStateException("El centro no tiene el rol \"" + ROL_INSTRUCTOR + "\" para dar acceso a instructores"));
+        if (!tenantScope.isSuperAdmin(actor) && rango(rol.getNivel()) <= rango(actor.getRol().getNivel())) {
+            throw new IllegalStateException("Tu rol no puede dar acceso al sistema a un instructor (rol \"" + ROL_INSTRUCTOR + "\")");
+        }
+        sucursales.forEach(s -> assertPuedeAsignarSucursal(actor, s));
+
+        String tempPassword = PasswordGenerator.generate();
+        Usuario usuario = new Usuario();
+        usuario.setCentro(centroRepository.getReferenceById(centroId));
+        usuario.setSucursal(sucursales.isEmpty() ? null : sucursales.get(0));
+        usuario.setSucursalesAdicionales(new HashSet<>(sucursales.isEmpty() ? List.of() : sucursales.subList(1, sucursales.size())));
+        usuario.setRol(rol);
+        usuario.setNombre(nombre);
+        usuario.setEmail(email);
+        usuario.setPasswordHash(passwordEncoder.encode(tempPassword));
+        usuario.setMustChangePassword(true);
+        usuario = usuarioRepository.save(usuario);
+        enviarAcceso(usuario, rol, tempPassword);
+        return usuario;
+    }
+
+    /** Mantiene la cuenta ligada alineada con la ficha del instructor. Solo se toca el correo y
+     * las sucursales de cuentas con rol "Entrenador": si la ficha esta ligada a la cuenta de
+     * alguien de mayor nivel (p. ej. el dueno que tambien da clases) eso se cambia en Usuarios. */
+    @Transactional
+    public void sincronizarCuentaInstructor(Usuario actor, Usuario cuenta, String nombre, String email,
+                                            List<Sucursal> sucursales) {
+        boolean esCuentaInstructor = ROL_INSTRUCTOR.equals(cuenta.getRol().getNombre());
+        if (!cuenta.getEmail().equalsIgnoreCase(email)) {
+            if (!esCuentaInstructor) {
+                throw new FieldConflictException("email", "Esta ficha esta ligada a la cuenta de " + cuenta.getNombre() +
+                        " (" + cuenta.getRol().getNombre() + "): su correo de acceso se cambia desde Usuarios.");
+            }
+            if (usuarioRepository.existsByEmail(email)) {
+                throw new FieldConflictException("email", "Ese correo ya esta registrado en otra cuenta. Usa otro correo de acceso.");
+            }
+            String anterior = cuenta.getEmail();
+            cuenta.setEmail(email);
+            mailService.send(email, "Tu usuario de acceso cambio (NexoraSport)",
+                    "Tu usuario para iniciar sesion ahora es: " + email +
+                            "\n(antes: " + anterior + "). Tu contrasena no cambio.");
+        }
+        cuenta.setNombre(nombre);
+        if (esCuentaInstructor && !sucursales.isEmpty()) {
+            sucursales.forEach(s -> assertPuedeAsignarSucursal(actor, s));
+            cuenta.setSucursal(sucursales.get(0));
+            cuenta.setSucursalesAdicionales(new HashSet<>(sucursales.subList(1, sucursales.size())));
+        }
+        usuarioRepository.save(cuenta);
+    }
+
+    /** Al desactivar al instructor se le corta el acceso (solo si la cuenta es de rol "Entrenador"). */
+    @Transactional
+    public void desactivarCuentaInstructor(Usuario cuenta) {
+        if (cuenta == null || !ROL_INSTRUCTOR.equals(cuenta.getRol().getNombre())) return;
+        cuenta.setActivo(false);
+        usuarioRepository.save(cuenta);
     }
 
     @Transactional
@@ -275,7 +367,8 @@ public class UsuarioService {
                 u.getNombre(),
                 u.getEmail(),
                 u.isActivo(),
-                u.isMustChangePassword()
+                u.isMustChangePassword(),
+                !tenantScope.isAdminOSuperior(u) && instructorRepository.existsByUsuarioId(u.getId())
         );
     }
 }

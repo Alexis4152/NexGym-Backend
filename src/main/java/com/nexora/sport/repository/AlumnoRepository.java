@@ -18,6 +18,21 @@ public interface AlumnoRepository extends JpaRepository<Alumno, Long> {
     Page<Alumno> findByCentroIdAndDeletedAtIsNullAndNombreContainingIgnoreCase(
             Long centroId, String nombre, Pageable pageable);
 
+    /** Alumnos "registrados" a un grupo de clases (ver AlcanceInstructorService): inscritos a la
+     * disciplina, con membresia vigente/pendiente que la cubra, o con reserva activa en alguna de
+     * esas clases. `disciplinaIds`/`claseIds` NUNCA vacios (el servicio corta antes). */
+    @Query("select a from Alumno a where a.centro.id = :centroId and a.deletedAt is null " +
+           "and (cast(:q as string) is null or lower(a.nombre) like lower(concat('%', cast(:q as string), '%'))) " +
+           "and (exists (select 1 from Alumno a2 join a2.disciplinas d where a2 = a and d.id in :disciplinaIds) " +
+           "  or exists (select 1 from Membresia m join m.disciplinas md where m.alumno = a " +
+           "             and m.estado in (com.nexora.sport.model.EstadoMembresia.ACTIVA, com.nexora.sport.model.EstadoMembresia.PENDIENTE) " +
+           "             and md.id in :disciplinaIds) " +
+           "  or exists (select 1 from Reserva r where r.alumno = a and r.clase.id in :claseIds " +
+           "             and r.estado <> com.nexora.sport.model.EstadoReserva.CANCELADA))")
+    Page<Alumno> buscarDeClases(@Param("centroId") Long centroId, @Param("q") String q,
+                                @Param("disciplinaIds") java.util.Collection<Long> disciplinaIds,
+                                @Param("claseIds") java.util.Collection<Long> claseIds, Pageable pageable);
+
     java.util.Optional<Alumno> findByCodigoQrAndDeletedAtIsNull(String codigoQr);
 
     /** Posibles coincidencias con el cliente de un apartado de plan (para no duplicar alumnos

@@ -30,7 +30,9 @@ public class AsistenciaController {
         return ApiResponse.ok(asistenciaService.listar(actor, PageRequest.of(page, size)));
     }
 
+    /** Ver la seccion no basta: registrar requiere el permiso (el Entrenador no lo trae por defecto). */
     @PostMapping
+    @PreAuthorize("@sectionAccess.check('ASISTENCIA') and @permisoAccess.check('ASISTENCIAS_REGISTRAR')")
     public ApiResponse<AsistenciaDto> registrar(@AuthenticationPrincipal Usuario actor, @Valid @RequestBody AsistenciaRequest request) {
         return ApiResponse.ok("Asistencia registrada", asistenciaService.registrar(actor, request));
     }
