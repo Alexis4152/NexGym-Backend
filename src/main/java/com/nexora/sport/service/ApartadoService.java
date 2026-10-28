@@ -108,7 +108,7 @@ public class ApartadoService {
 
         String detalle = detalleItems(apartado);
         for (Usuario staff : staffParaNotificar(centro.getId(), null)) {
-            mailService.send(staff.getEmail(), "Nueva solicitud de apartado #" + apartado.getId(),
+            mailService.send(MailService.Remitente.de(apartado.getCentro()), staff.getEmail(), "Nueva solicitud de apartado #" + apartado.getId(),
                     "Cliente: " + apartado.getClienteNombre() + " (" + apartado.getClienteTelefono() + ")\n\n"
                             + detalle + "\n\nRevisa y confirma la solicitud desde el panel para reservar el stock.");
         }
@@ -235,12 +235,12 @@ public class ApartadoService {
         apartado = apartadoRepository.save(apartado);
 
         for (Usuario staff : staffParaNotificar(apartado.getCentro().getId(), actor)) {
-            mailService.send(staff.getEmail(), "Apartado #" + apartado.getId() + " confirmado",
+            mailService.send(MailService.Remitente.de(apartado.getCentro()), staff.getEmail(), "Apartado #" + apartado.getId() + " confirmado",
                     actor.getNombre() + " confirmo el apartado de " + apartado.getClienteNombre()
                             + ". Vigente hasta " + apartado.getExpiraEn() + ".");
         }
         if (apartado.getClienteEmail() != null && !apartado.getClienteEmail().isBlank()) {
-            mailService.send(apartado.getClienteEmail(), "Tu apartado #" + apartado.getId() + " fue confirmado",
+            mailService.send(MailService.Remitente.de(apartado.getCentro()), apartado.getClienteEmail(), "Tu apartado #" + apartado.getId() + " fue confirmado",
                     "Tu reserva quedo confirmada. Tienes hasta " + apartado.getExpiraEn()
                             + " para recogerla y pagarla en la tienda.\n\n" + detalleItems(apartado));
         }
@@ -261,7 +261,7 @@ public class ApartadoService {
         apartado = apartadoRepository.save(apartado);
 
         for (Usuario staff : staffParaNotificar(apartado.getCentro().getId(), actor)) {
-            mailService.send(staff.getEmail(), "Apartado #" + apartado.getId() + " completado",
+            mailService.send(MailService.Remitente.de(apartado.getCentro()), staff.getEmail(), "Apartado #" + apartado.getId() + " completado",
                     actor.getNombre() + " completo el apartado de " + apartado.getClienteNombre() + " (venta #" + venta.id() + ").");
         }
         return toDto(apartado, false);
@@ -301,11 +301,11 @@ public class ApartadoService {
                         + ") cancelo su apartado desde la tienda en linea"
                 : actor.getNombre() + " cancelo el apartado de " + apartado.getClienteNombre();
         for (Usuario staff : staffParaNotificar(apartado.getCentro().getId(), actor)) {
-            mailService.send(staff.getEmail(), "Apartado #" + apartado.getId() + " cancelado", quien + lineaMotivo);
+            mailService.send(MailService.Remitente.de(apartado.getCentro()), staff.getEmail(), "Apartado #" + apartado.getId() + " cancelado", quien + lineaMotivo);
         }
         // El cliente que cancela el mismo no necesita un correo avisandole lo que acaba de hacer.
         if (!porCliente && apartado.getClienteEmail() != null && !apartado.getClienteEmail().isBlank()) {
-            mailService.send(apartado.getClienteEmail(), "Tu apartado #" + apartado.getId() + " fue cancelado",
+            mailService.send(MailService.Remitente.de(apartado.getCentro()), apartado.getClienteEmail(), "Tu apartado #" + apartado.getId() + " fue cancelado",
                     "Tu reserva fue cancelada." + lineaMotivo);
         }
         if (porCliente) {
@@ -457,11 +457,11 @@ public class ApartadoService {
             apartadoRepository.save(apartado);
 
             for (Usuario staff : staffParaNotificar(apartado.getCentro().getId(), null)) {
-                mailService.send(staff.getEmail(), "Apartado #" + apartado.getId() + " vencio",
+                mailService.send(MailService.Remitente.de(apartado.getCentro()), staff.getEmail(), "Apartado #" + apartado.getId() + " vencio",
                         "El apartado de " + apartado.getClienteNombre() + " vencio sin que lo recogieran. El stock ya se restituyo.");
             }
             if (apartado.getClienteEmail() != null && !apartado.getClienteEmail().isBlank()) {
-                mailService.send(apartado.getClienteEmail(), "Tu apartado #" + apartado.getId() + " vencio",
+                mailService.send(MailService.Remitente.de(apartado.getCentro()), apartado.getClienteEmail(), "Tu apartado #" + apartado.getId() + " vencio",
                         "El tiempo para recoger tu apartado ya paso, asi que se libero. Si aun lo quieres, puedes solicitarlo de nuevo.");
             }
         }

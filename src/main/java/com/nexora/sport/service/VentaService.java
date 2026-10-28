@@ -247,7 +247,7 @@ public class VentaService {
         if ((venta.getTipoTicket() == TipoTicket.DIGITAL || venta.getTipoTicket() == TipoTicket.AMBOS)
                 && venta.getClienteEmail() != null && !venta.getClienteEmail().isBlank()) {
             byte[] pdf = ticketPdfService.generar(venta);
-            mailService.enviarConAdjunto(venta.getClienteEmail(), "Tu ticket de compra #" + venta.getId(),
+            mailService.enviarConAdjunto(MailService.Remitente.de(venta.getCentro()), venta.getClienteEmail(), "Tu ticket de compra #" + venta.getId(),
                     "Gracias por tu compra. Adjuntamos tu ticket en PDF.", "ticket-" + venta.getId() + ".pdf", pdf);
         }
 
@@ -311,7 +311,7 @@ public class VentaService {
         if ((venta.getTipoTicket() == TipoTicket.DIGITAL || venta.getTipoTicket() == TipoTicket.AMBOS)
                 && venta.getClienteEmail() != null && !venta.getClienteEmail().isBlank()) {
             byte[] pdf = ticketPdfService.generar(venta);
-            mailService.enviarConAdjunto(venta.getClienteEmail(), "Tu ticket de compra #" + venta.getId(),
+            mailService.enviarConAdjunto(MailService.Remitente.de(venta.getCentro()), venta.getClienteEmail(), "Tu ticket de compra #" + venta.getId(),
                     "Gracias por tu compra. Adjuntamos tu ticket en PDF.", "ticket-" + venta.getId() + ".pdf", pdf);
         }
 

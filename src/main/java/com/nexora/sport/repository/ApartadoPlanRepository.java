@@ -27,4 +27,9 @@ public interface ApartadoPlanRepository extends JpaRepository<ApartadoPlan, Long
     Page<ApartadoPlan> buscar(@Param("centroId") Long centroId, @Param("estado") EstadoApartadoPlan estado,
                                @Param("desde") LocalDateTime desde, @Param("hasta") LocalDateTime hasta,
                                @Param("q") String q, Pageable pageable);
+
+    /** Para ARCO (resumen de Acceso): apartados de plan por correo o telefono del cliente. Vacio = no filtra por ese dato. */
+    @Query("select a from ApartadoPlan a where (:email <> '' and lower(a.clienteEmail) = lower(:email)) " +
+           "or (:telefono <> '' and a.clienteTelefono = :telefono) order by a.solicitadoEn desc")
+    java.util.List<ApartadoPlan> buscarTitularArco(@Param("email") String email, @Param("telefono") String telefono);
 }

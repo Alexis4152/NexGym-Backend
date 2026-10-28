@@ -51,7 +51,7 @@ public class NotificacionEmailDispatcher {
     private void intentar(NotificacionEnvio envio) {
         envio.setIntentos(envio.getIntentos() + 1);
         try {
-            mailService.sendSync(envio.getDestino(), envio.getNotificacion().getTitulo(), envio.getNotificacion().getMensaje());
+            mailService.sendSync(MailService.Remitente.de(envio.getNotificacion().getCentro()), envio.getDestino(), envio.getNotificacion().getTitulo(), envio.getNotificacion().getMensaje());
             envio.setEstado(EstadoEnvio.ENVIADA);
             envio.setEnviadoEn(LocalDateTime.now());
             envio.setError(null);

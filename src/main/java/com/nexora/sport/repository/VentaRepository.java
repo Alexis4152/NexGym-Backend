@@ -81,4 +81,8 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
             "where v.centro_id = :centroId and v.estado = 'COMPLETADA' and v.created_at >= :desde and v.created_at < :hasta " +
             "group by u.id, u.nombre order by total desc")
     List<Object[]> operacionesPorUsuario(@Param("centroId") Long centroId, @Param("desde") LocalDateTime desde, @Param("hasta") LocalDateTime hasta);
+
+    /** Para ARCO (resumen de Acceso): ventas con el correo del cliente. */
+    @Query("select v from Venta v where lower(v.clienteEmail) = lower(:email) order by v.createdAt desc")
+    List<Venta> buscarPorClienteEmailArco(@Param("email") String email);
 }

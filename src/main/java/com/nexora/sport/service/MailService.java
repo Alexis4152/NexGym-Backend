@@ -1,5 +1,6 @@
 package com.nexora.sport.service;
 
+import com.nexora.sport.model.Centro;
 import com.nexora.sport.model.MailConfig;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
@@ -18,6 +19,11 @@ import java.util.Properties;
  * envio, no del JavaMailSender autoconfigurado por spring.mail.* -- asi el SUPER_ADMIN puede
  * cambiar de cuenta o rotar la contrasena desde "Correo del sistema" sin reiniciar.
  *
+ * El "De:" siempre es la cuenta autenticada (Gmail no deja mandar con otro remitente); lo
+ * que cambia por centro es el nombre visible y el "Responder a" (Centro#emailContacto), ver
+ * {@link Remitente} -- igual que DemoPV con Tienda#contactEmail. Los correos de cuenta/
+ * plataforma (recuperar contrasena, accesos) salen sin Remitente, como "NexoraSport".
+ *
  * send/enviarConAdjunto son "best effort": nunca deben tumbar la operacion que los dispara.
  */
 @Service
@@ -25,6 +31,18 @@ public class MailService {
 
     private static final Logger log = LoggerFactory.getLogger(MailService.class);
     private static final String NOMBRE_REMITENTE = "NexoraSport";
+
+    /**
+     * Nombre visible y "Responder a" de un correo operativo de un centro (ticket, apartado,
+     * QR del alumno, notificaciones). Se arma en el hilo de quien llama, con la transaccion
+     * abierta: los envios son @Async y ahi el Centro (LAZY) ya no se podria leer.
+     */
+    public record Remitente(String nombre, String responderA) {
+        public static Remitente de(Centro centro) {
+            if (centro == null) return null;
+            return new Remitente(centro.getNombre(), centro.getEmailContacto());
+        }
+    }
 
     private final MailConfigService mailConfigService;
 
@@ -34,6 +52,11 @@ public class MailService {
 
     @Async
     public void send(String to, String subject, String body) {
+        send(null, to, subject, body);
+    }
+
+    @Async
+    public void send(Remitente remitente, String to, String subject, String body) {
         if (to == null || to.isBlank()) return;
         MailConfig cfg = mailConfigService.getEntity();
         if (!listo(cfg)) {
@@ -41,10 +64,14 @@ public class MailService {
             return;
         }
         try {
-            enviar(cfg, to, subject, body, null, null);
+            enviar(cfg, remitente, to, subject, body, null, null);
         } catch (Exception e) {
             log.warn("No se pudo enviar correo a {}: {}", to, e.getMessage());
         }
+    }
+
+    public void sendSync(String to, String subject, String body) {
+        sendSync(null, to, subject, body);
     }
 
     /**
@@ -52,7 +79,7 @@ public class MailService {
      * necesita saber si el envio realmente funciono (NotificacionEmailDispatcher, y el boton
      * "Enviar correo de prueba" de la configuracion de correo).
      */
-    public void sendSync(String to, String subject, String body) {
+    public void sendSync(Remitente remitente, String to, String subject, String body) {
         if (to == null || to.isBlank()) {
             throw new IllegalArgumentException("Destinatario vacio");
         }
@@ -64,7 +91,7 @@ public class MailService {
             throw new IllegalStateException("No hay una cuenta de correo configurada (Correo del sistema)");
         }
         try {
-            enviar(cfg, to, subject, body, null, null);
+            enviar(cfg, remitente, to, subject, body, null, null);
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
@@ -73,7 +100,8 @@ public class MailService {
     }
 
     @Async
-    public void enviarConAdjunto(String to, String subject, String body, String nombreArchivo, byte[] adjunto) {
+    public void enviarConAdjunto(Remitente remitente, String to, String subject, String body,
+                                 String nombreArchivo, byte[] adjunto) {
         if (to == null || to.isBlank()) return;
         MailConfig cfg = mailConfigService.getEntity();
         if (!listo(cfg)) {
@@ -81,7 +109,7 @@ public class MailService {
             return;
         }
         try {
-            enviar(cfg, to, subject, body, nombreArchivo, adjunto);
+            enviar(cfg, remitente, to, subject, body, nombreArchivo, adjunto);
         } catch (Exception e) {
             log.warn("No se pudo enviar correo con adjunto a {}: {}", to, e.getMessage());
         }
@@ -93,7 +121,7 @@ public class MailService {
                 && cfg.getSmtpPassword() != null && !cfg.getSmtpPassword().isBlank();
     }
 
-    private void enviar(MailConfig cfg, String to, String subject, String body,
+    private void enviar(MailConfig cfg, Remitente remitente, String to, String subject, String body,
                         String nombreArchivo, byte[] adjunto) throws Exception {
         JavaMailSenderImpl sender = new JavaMailSenderImpl();
         sender.setHost(cfg.getSmtpHost());
@@ -112,7 +140,17 @@ public class MailService {
         MimeMessage message = sender.createMimeMessage();
         boolean multipart = adjunto != null;
         MimeMessageHelper helper = new MimeMessageHelper(message, multipart, "UTF-8");
-        helper.setFrom(new InternetAddress(cfg.getSmtpUsername(), NOMBRE_REMITENTE, "UTF-8"));
+        String nombreVisible = remitente != null && remitente.nombre() != null && !remitente.nombre().isBlank()
+                ? remitente.nombre() : NOMBRE_REMITENTE;
+        helper.setFrom(new InternetAddress(cfg.getSmtpUsername(), nombreVisible, "UTF-8"));
+        if (remitente != null && remitente.responderA() != null && !remitente.responderA().isBlank()) {
+            // Un correo de contacto mal capturado no debe impedir que salga el correo.
+            try {
+                helper.setReplyTo(new InternetAddress(remitente.responderA().trim(), true));
+            } catch (Exception e) {
+                log.warn("Correo de contacto invalido para \"Responder a\" ({}): se omite", remitente.responderA());
+            }
+        }
         helper.setTo(to);
         helper.setSubject(subject);
         helper.setText(body);

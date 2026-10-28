@@ -44,4 +44,9 @@ public interface ApartadoRepository extends JpaRepository<Apartado, Long> {
     @Query("select coalesce(sum(i.cantidad), 0) from ApartadoItem i " +
            "where i.articulo.id = :articuloId and i.apartado.estado = 'PENDIENTE' and i.apartado.id < :apartadoId")
     int sumCantidadPendienteAnteriorPorArticulo(@Param("articuloId") Long articuloId, @Param("apartadoId") Long apartadoId);
+
+    /** Para ARCO (resumen de Acceso): apartados por correo o telefono del cliente. Vacio = no filtra por ese dato. */
+    @Query("select a from Apartado a where (:email <> '' and lower(a.clienteEmail) = lower(:email)) " +
+           "or (:telefono <> '' and a.clienteTelefono = :telefono) order by a.solicitadoEn desc")
+    List<Apartado> buscarTitularArco(@Param("email") String email, @Param("telefono") String telefono);
 }

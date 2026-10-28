@@ -64,4 +64,13 @@ public interface AlumnoRepository extends JpaRepository<Alumno, Long> {
             "from alumnos a where a.centro_id = :centroId and a.deleted_at is null " +
             "and a.fecha_ingreso >= :desde and a.fecha_ingreso <= :hasta group by 1 order by 1")
     List<Object[]> nuevosPorMes(@Param("centroId") Long centroId, @Param("desde") LocalDate desde, @Param("hasta") LocalDate hasta);
+
+    /** Para ARCO: el correo de un alumno identifica al titular en el formulario publico (cualquier centro). */
+    @Query("select a from Alumno a where a.deletedAt is null and lower(a.email) = lower(:email)")
+    List<Alumno> buscarPorEmailArco(@Param("email") String email);
+
+    /** Para ARCO (resumen de Acceso): fichas de alumno por correo o telefono. Vacio = no filtra por ese dato. */
+    @Query("select a from Alumno a where a.deletedAt is null and ((:email <> '' and lower(a.email) = lower(:email)) " +
+           "or (:telefono <> '' and a.telefono = :telefono))")
+    List<Alumno> buscarTitularArco(@Param("email") String email, @Param("telefono") String telefono);
 }

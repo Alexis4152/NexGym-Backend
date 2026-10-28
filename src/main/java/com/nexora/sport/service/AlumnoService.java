@@ -136,7 +136,7 @@ public class AlumnoService {
                 "Este es tu codigo QR personal de " + nombreCentro + ". Muestralo en recepcion (o pasalo por el " +
                 "lector) para registrar tu asistencia y agilizar tus compras y clases.\n\n" +
                 "Guardalo en tu telefono o imprimelo -- es unico e intransferible.";
-        mailService.enviarConAdjunto(alumno.getEmail(), "Tu codigo QR de acceso — " + nombreCentro,
+        mailService.enviarConAdjunto(MailService.Remitente.de(alumno.getCentro()), alumno.getEmail(), "Tu codigo QR de acceso — " + nombreCentro,
                 cuerpo, "codigo-qr.png", qrPng);
     }
 

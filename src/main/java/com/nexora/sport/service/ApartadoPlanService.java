@@ -106,7 +106,7 @@ public class ApartadoPlanService {
         apartado = apartadoPlanRepository.save(apartado);
 
         for (Usuario staff : staffParaNotificar(centro.getId())) {
-            mailService.send(staff.getEmail(), "Nueva solicitud de apartado de plan #" + apartado.getId(),
+            mailService.send(MailService.Remitente.de(apartado.getCentro()), staff.getEmail(), "Nueva solicitud de apartado de plan #" + apartado.getId(),
                     "Cliente: " + apartado.getClienteNombre() + " (" + apartado.getClienteTelefono() + ", " + apartado.getClienteEmail() + ")\n"
                             + "Plan: " + apartado.getPlanNombreSnapshot() + " ($" + apartado.getPrecioPlanSnapshot() + ")\n"
                             + "Anticipo pagado con tarjeta: $" + apartado.getMontoAnticipo() + "\n\n"
@@ -164,7 +164,7 @@ public class ApartadoPlanService {
         apartado.setMotivoCancelacion(request.motivo());
         apartado = apartadoPlanRepository.save(apartado);
 
-        mailService.send(apartado.getClienteEmail(), "Tu apartado de plan #" + apartado.getId() + " fue cancelado",
+        mailService.send(MailService.Remitente.de(apartado.getCentro()), apartado.getClienteEmail(), "Tu apartado de plan #" + apartado.getId() + " fue cancelado",
                 "Tu reserva del plan \"" + apartado.getPlanNombreSnapshot() + "\" fue cancelada."
                         + (request.motivo() != null ? ("\nMotivo: " + request.motivo()) : "")
                         + "\nTu anticipo de $" + apartado.getMontoAnticipo() + " te sera reembolsado por el centro.");
